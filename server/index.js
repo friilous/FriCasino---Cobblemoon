@@ -21,6 +21,19 @@ global.io = io;
 app.use(cors());
 app.use(express.json());
 
+
+
+
+app.delete('/api/admin/clear-history', (req, res) => {
+  db.prepare('DELETE FROM game_history').run()
+  db.prepare('DELETE FROM live_feed').run()
+  res.json({ ok: true })
+})
+
+
+
+
+
 // ── Routes API ────────────────────────────────────────────────────────────────
 app.use('/api/auth',   require('./routes/auth'));
 app.use('/api/admin',  require('./routes/admin'));
