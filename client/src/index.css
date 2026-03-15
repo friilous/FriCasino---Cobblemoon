@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .btn-gold {
+    @apply bg-casino-gold text-black font-bold py-2 px-6 rounded-lg 
+           hover:bg-casino-gold2 transition-all duration-200 
+           disabled:opacity-40 disabled:cursor-not-allowed
+           shadow-lg hover:shadow-casino-gold/30;
+  }
+  .btn-outline {
+    @apply border border-casino-gold text-casino-gold font-semibold py-2 px-6 rounded-lg
+           hover:bg-casino-gold hover:text-black transition-all duration-200
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .card {
+    @apply bg-casino-card border border-casino-border rounded-xl p-6;
+  }
+  .input-field {
+    @apply w-full bg-casino-bg border border-casino-border rounded-lg px-4 py-3
+           text-white placeholder-gray-500 focus:outline-none focus:border-casino-gold
+           transition-colors;
+  }
+  .badge-gold {
+    @apply inline-flex items-center gap-1 bg-casino-gold/20 text-casino-gold 
+           text-xs font-semibold px-2 py-1 rounded-full;
+  }
+}
+
+.glow-gold { box-shadow: 0 0 20px rgba(240,180,41,0.4); }
+.glow-purple { box-shadow: 0 0 20px rgba(124,58,237,0.4); }
+.text-gradient {
+  background: linear-gradient(135deg, #f0b429, #ffd700, #f0b429);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
