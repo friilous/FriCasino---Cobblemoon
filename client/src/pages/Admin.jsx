@@ -159,7 +159,7 @@ function UsersTab({ users, onRefresh }) {
   return (
     <div className="grid lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 card overflow-x-auto">
-        <h2 className="font-bold text-white mb-4">Tous les joueurs ({users.filter(u => !u.is_admin).length})</h2>
+        <h2 className="font-bold text-white mb-4">Tous les comptes ({users.length})</h2>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-gray-500 border-b border-casino-border">
@@ -170,7 +170,7 @@ function UsersTab({ users, onRefresh }) {
             </tr>
           </thead>
           <tbody>
-            {users.filter(u => !u.is_admin).map(u => (
+            {users.map(u => (
               <tr key={u.id} className={`border-b border-casino-border/50 hover:bg-casino-border/20 cursor-pointer ${selected?.id === u.id ? 'bg-casino-gold/5' : ''}`}
                 onClick={() => setSelected(u)}>
                 <td className="py-2 font-medium text-white">{u.username}</td>
