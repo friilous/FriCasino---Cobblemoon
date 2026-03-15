@@ -24,12 +24,11 @@ app.use(express.json());
 
 
 
-app.delete('/api/admin/clear-history', (req, res) => {
+app.get('/api/admin/clear-history', (req, res) => {
   db.prepare('DELETE FROM game_history').run()
   db.prepare('DELETE FROM live_feed').run()
   res.json({ ok: true })
 })
-
 
 
 
