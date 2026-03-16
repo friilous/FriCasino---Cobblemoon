@@ -11,7 +11,7 @@ export function SocketProvider({ children }) {
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
-    const socket = io('/', { transports: ['websocket'] })
+    const socket = io(import.meta.env.VITE_API_URL, { transports: ['websocket'] })
     socketRef.current = socket
 
     socket.on('connect', () => setConnected(true))
