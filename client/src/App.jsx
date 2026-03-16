@@ -9,6 +9,7 @@ import Slots from './pages/games/Slots'
 import Plinko from './pages/games/Plinko'
 import Roulette from './pages/games/Roulette'
 import Crash from './pages/games/Crash'
+import Blackjack from './pages/games/Blackjack'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
 
@@ -49,6 +50,7 @@ function AppRoutes() {
           <Route path="/casino/plinko"         element={<ProtectedRoute><Plinko /></ProtectedRoute>} />
           <Route path="/casino/roulette"       element={<ProtectedRoute><Roulette /></ProtectedRoute>} />
           <Route path="/casino/crash"          element={<ProtectedRoute><Crash /></ProtectedRoute>} />
+          <Route path="/casino/blackjack"      element={<ProtectedRoute><Blackjack /></ProtectedRoute>} />
           <Route path="/profil"                element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin"                 element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
           <Route path="*"                      element={<Navigate to="/" />} />

@@ -5,6 +5,7 @@ const slots    = require('../games/slots')
 const plinko   = require('../games/plinko')
 const roulette = require('../games/roulette')
 const crash = require('../games/crash')
+const blackjack = require('../games/blackjack')
 
 const router = express.Router()
 const MIN_BET = 10
@@ -148,6 +149,75 @@ router.post('/crash', authMiddleware, async (req, res) => {
     if (global.io) global.io.to(`user_${req.user.id}`).emit('balance_update', { balance: newBalance })
  
     res.json({ ...result, balance: newBalance })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ── Blackjack ─────────────────────────────────────────────────────────────────────
+
+
+const blackjackSessions = {}
+ 
+router.post('/blackjack', authMiddleware, async (req, res) => {
+  try {
+    const { action, bet: betRaw } = req.body
+    const userId = req.user.id
+ 
+    const userResult = await query(`SELECT * FROM users WHERE id = $1`, [userId])
+    const user = userResult.rows[0]
+ 
+    // ── Nouvelle partie ──────────────────────────────────────────────────────
+    if (action === 'deal') {
+      const bet = parseInt(betRaw)
+      const err = validateBet(bet, user.balance)
+      if (err) return res.status(400).json({ error: err })
+ 
+      // Déduire la mise immédiatement
+      await query(`UPDATE users SET balance = $1 WHERE id = $2`, [user.balance - bet, userId])
+ 
+      const result = blackjack.play(bet, 'deal', null)
+      blackjackSessions[userId] = { ...result, bet, userId }
+ 
+      return res.json({
+        ...result,
+        bet,
+        balance: user.balance - bet,
+        deck: undefined, // ne pas envoyer le deck au client
+      })
+    }
+ 
+    // ── Hit ou Stand ─────────────────────────────────────────────────────────
+    if (action === 'hit' || action === 'stand') {
+      const session = blackjackSessions[userId]
+      if (!session) return res.status(400).json({ error: 'Aucune partie en cours' })
+      if (session.done) return res.status(400).json({ error: 'Partie déjà terminée' })
+ 
+      const result = blackjack.play(session.bet, action, session)
+ 
+      if (result.done) {
+        // Mettre à jour le solde avec le gain
+        const newBalance = user.balance + result.payout
+        await query(`UPDATE users SET balance = $1 WHERE id = $2`, [newBalance, userId])
+        await query(
+          `INSERT INTO game_history (user_id, game, bet, payout, meta) VALUES ($1, 'blackjack', $2, $3, $4)`,
+          [userId, session.bet, result.payout, JSON.stringify({ status: result.status, multiplier: result.multiplier })]
+        )
+        if (result.payout >= session.bet * 2.5) {
+          await emitLiveFeed(req.user.username, 'blackjack', session.bet, result.payout, result.multiplier)
+        }
+        if (global.io) global.io.to(`user_${userId}`).emit('balance_update', { balance: newBalance })
+        delete blackjackSessions[userId]
+        return res.json({ ...result, bet: session.bet, balance: newBalance, deck: undefined })
+      }
+ 
+      // Partie toujours en cours — mettre à jour la session
+      blackjackSessions[userId] = { ...session, ...result }
+      return res.json({ ...result, bet: session.bet, balance: user.balance, deck: undefined })
+    }
+ 
+    return res.status(400).json({ error: 'Action invalide' })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Erreur serveur' })
