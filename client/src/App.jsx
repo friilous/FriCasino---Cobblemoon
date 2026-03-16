@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { SocketProvider } from './contexts/SocketContext'
 import Sidebar from './components/Sidebar'
-import Home from './pages/Home'
 import Login from './pages/Login'
 import ChangePassword from './pages/ChangePassword'
 import Casino from './pages/Casino'
