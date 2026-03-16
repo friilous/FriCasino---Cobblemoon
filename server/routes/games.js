@@ -4,6 +4,7 @@ const { authMiddleware } = require('../middleware/auth')
 const slots    = require('../games/slots')
 const plinko   = require('../games/plinko')
 const roulette = require('../games/roulette')
+const crash = require('../games/crash')
 
 const router = express.Router()
 const MIN_BET = 10
@@ -116,6 +117,43 @@ router.post('/roulette', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
+
+
+// ── Crash ────────────────────────────────────────────────────────────────────
+
+
+router.post('/crash', authMiddleware, async (req, res) => {
+  try {
+    const bet      = parseInt(req.body.bet)
+    const cashoutAt = req.body.cashoutAt ? parseFloat(req.body.cashoutAt) : null
+ 
+    const userResult = await query(`SELECT * FROM users WHERE id = $1`, [req.user.id])
+    const user = userResult.rows[0]
+ 
+    const err = validateBet(bet, user.balance)
+    if (err) return res.status(400).json({ error: err })
+ 
+    const result     = crash.play(bet, cashoutAt)
+    const newBalance = user.balance - bet + result.payout
+ 
+    await query(`UPDATE users SET balance = $1 WHERE id = $2`, [newBalance, user.id])
+    await query(
+      `INSERT INTO game_history (user_id, game, bet, payout, meta) VALUES ($1, 'crash', $2, $3, $4)`,
+      [user.id, bet, result.payout, JSON.stringify({ crashPoint: result.crashPoint, multiplier: result.multiplier })]
+    )
+ 
+    if (result.payout >= bet * 3) {
+      await emitLiveFeed(req.user.username, 'crash', bet, result.payout, result.multiplier)
+    }
+    if (global.io) global.io.to(`user_${req.user.id}`).emit('balance_update', { balance: newBalance })
+ 
+    res.json({ ...result, balance: newBalance })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
 
 // ── Live feed ─────────────────────────────────────────────────────────────────
 router.get('/live-feed', async (req, res) => {

@@ -47,6 +47,7 @@ function AppRoutes() {
           <Route path="/casino/slots"          element={<ProtectedRoute><Slots /></ProtectedRoute>} />
           <Route path="/casino/plinko"         element={<ProtectedRoute><Plinko /></ProtectedRoute>} />
           <Route path="/casino/roulette"       element={<ProtectedRoute><Roulette /></ProtectedRoute>} />
+          <Route path="/casino/crash"          element={<ProtectedRoute><Crash /></ProtectedRoute>} />
           <Route path="/profil"                element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin"                 element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
           <Route path="*"                      element={<Navigate to="/" />} />
