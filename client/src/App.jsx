@@ -8,6 +8,7 @@ import Casino from './pages/Casino'
 import Slots from './pages/games/Slots'
 import Plinko from './pages/games/Plinko'
 import Roulette from './pages/games/Roulette'
+import Crash from './pages/games/Crash'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
 
