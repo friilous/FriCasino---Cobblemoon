@@ -1,7 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { SocketProvider } from './contexts/SocketContext'
-import Navbar from './components/Navbar'
+import Sidebar from './components/Sidebar'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import ChangePassword from './pages/ChangePassword'
@@ -15,8 +15,11 @@ import Admin from './pages/Admin'
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth()
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-casino-gold text-2xl animate-pulse">Chargement...</div>
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: '#07071a',
+    }}>
+      <div style={{ color: '#f0c040', fontSize: 18, fontWeight: 700 }}>Chargement...</div>
     </div>
   )
   if (!user) return <Navigate to="/login" replace />
@@ -25,24 +28,32 @@ function ProtectedRoute({ children, adminOnly = false }) {
   return children
 }
 
+// Pages sans sidebar (login, change password)
+const NO_SIDEBAR_PATHS = ['/login', '/changer-mot-de-passe']
+
 function AppRoutes() {
   const { user } = useAuth()
+  const location = useLocation()
+  const showSidebar = user && !NO_SIDEBAR_PATHS.includes(location.pathname)
+
   return (
-    <>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={user ? <Navigate to="/casino" /> : <Login />} />
-        <Route path="/changer-mot-de-passe" element={<ChangePassword />} />
-        <Route path="/casino" element={<ProtectedRoute><Casino /></ProtectedRoute>} />
-        <Route path="/casino/slots" element={<ProtectedRoute><Slots /></ProtectedRoute>} />
-        <Route path="/casino/plinko" element={<ProtectedRoute><Plinko /></ProtectedRoute>} />
-        <Route path="/casino/roulette" element={<ProtectedRoute><Roulette /></ProtectedRoute>} />
-        <Route path="/profil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#07071a' }}>
+      {showSidebar && <Sidebar />}
+      <main style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
+        <Routes>
+          <Route path="/"                      element={<Navigate to={user ? '/casino' : '/login'} />} />
+          <Route path="/login"                 element={user ? <Navigate to="/casino" /> : <Login />} />
+          <Route path="/changer-mot-de-passe"  element={<ChangePassword />} />
+          <Route path="/casino"                element={<ProtectedRoute><Casino /></ProtectedRoute>} />
+          <Route path="/casino/slots"          element={<ProtectedRoute><Slots /></ProtectedRoute>} />
+          <Route path="/casino/plinko"         element={<ProtectedRoute><Plinko /></ProtectedRoute>} />
+          <Route path="/casino/roulette"       element={<ProtectedRoute><Roulette /></ProtectedRoute>} />
+          <Route path="/profil"                element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/admin"                 element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
+          <Route path="*"                      element={<Navigate to="/" />} />
+        </Routes>
+      </main>
+    </div>
   )
 }
 

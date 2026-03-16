@@ -2,8 +2,8 @@ import { useSocket } from '../contexts/SocketContext'
 import { useEffect } from 'react'
 import axios from 'axios'
 
-const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎡' }
-const GAME_NAMES = { slots: 'Slots', plinko: 'Plinko', roulette: 'Roulette' }
+const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎯', crash: '📈', blackjack: '🃏', mines: '💣' }
+const GAME_NAMES = { slots: 'Slots', plinko: 'Plinko', roulette: 'Roulette', crash: 'Crash', blackjack: 'Blackjack', mines: 'Mines' }
 
 export default function LiveFeed({ compact = false }) {
   const { liveFeed, setLiveFeed } = useSocket()
@@ -15,88 +15,119 @@ export default function LiveFeed({ compact = false }) {
   }, [])
 
   if (compact) {
-    // Version compacte pour les pages de jeux
     return (
-      <div className="card p-3">
-        <h4 className="text-casino-gold font-semibold text-xs uppercase tracking-wide mb-2 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse inline-block" />
+      <div style={{
+        background: '#0c0c22', border: '1px solid #1e1e40',
+        borderRadius: 10, padding: 12,
+      }}>
+        <div style={{
+          fontSize: 9, color: '#2e2e55', textTransform: 'uppercase',
+          letterSpacing: 1, marginBottom: 8,
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <div style={{
+            width: 5, height: 5, borderRadius: '50%', background: '#40f080',
+            animation: 'pulse-dot 1.4s ease-in-out infinite',
+          }} />
           Live
-        </h4>
+        </div>
         {liveFeed.length === 0 ? (
-          <p className="text-gray-600 text-xs text-center py-2">Aucune activité récente</p>
+          <p style={{ fontSize: 10, color: '#2e2e50', textAlign: 'center', padding: '8px 0' }}>
+            Aucune activité
+          </p>
         ) : (
-          <div className="space-y-1.5 max-h-48 overflow-y-auto">
-            {liveFeed.slice(0, 8).map((event, i) => {
-              const mult = event.multiplier || (event.bet > 0 ? event.payout / event.bet : 0)
-              return (
-                <div key={`${event.timestamp}-${i}`}
-                  className={`flex items-center justify-between text-xs py-1
-                    ${i === 0 ? 'animate-slide-in' : ''}`}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span>{GAME_ICONS[event.game]}</span>
-                    <span className="text-gray-400 truncate">{event.username}</span>
-                  </div>
-                  <span className={`font-bold shrink-0 ml-2 ${event.payout > 0 ? 'text-green-400' : 'text-gray-600'}`}>
-                    {event.payout > 0 ? `+${event.payout.toLocaleString()}` : `-${event.bet?.toLocaleString()}`}
-                  </span>
+          <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+            {liveFeed.slice(0, 8).map((e, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '4px 0', borderBottom: '1px solid #0f0f28', fontSize: 10,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span>{GAME_ICONS[e.game] || '🎲'}</span>
+                  <span style={{ color: '#7777a0' }}>{e.username}</span>
                 </div>
-              )
-            })}
+                <span style={{
+                  fontWeight: 700,
+                  color: e.payout > 0 ? '#40f080' : '#555577',
+                }}>
+                  {e.payout > 0 ? `+${e.payout.toLocaleString()}` : `-${e.bet?.toLocaleString()}`}
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </div>
     )
   }
 
-  // Version complète pour la Home et le Lobby
   return (
-    <div className="card overflow-hidden">
-      <h3 className="text-casino-gold font-casino font-bold text-lg mb-4 flex items-center gap-2">
-        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+    <div style={{
+      background: '#0c0c22', border: '1px solid #1e1e40',
+      borderRadius: 10, padding: 16,
+    }}>
+      <h3 style={{
+        fontSize: 11, color: '#44446a', textTransform: 'uppercase',
+        letterSpacing: 1, marginBottom: 12, margin: '0 0 12px',
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <div style={{
+          width: 6, height: 6, borderRadius: '50%', background: '#40f080',
+          animation: 'pulse-dot 1.4s ease-in-out infinite',
+        }} />
         Activité en direct
       </h3>
+
       {liveFeed.length === 0 ? (
-        <p className="text-gray-500 text-sm text-center py-6">Aucune activité — sois le premier à jouer ! 🎲</p>
+        <p style={{ fontSize: 11, color: '#2e2e50', textAlign: 'center', padding: '20px 0' }}>
+          Aucune activité — sois le premier à jouer ! 🎲
+        </p>
       ) : (
-        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-          {liveFeed.map((event, i) => (
-            <FeedItem key={`${event.timestamp}-${i}`} event={event} isNew={i === 0} />
-          ))}
+        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+          {liveFeed.map((e, i) => {
+            const mult     = e.multiplier || (e.bet > 0 ? e.payout / e.bet : 0)
+            const isJackpot = mult >= 10
+            return (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '7px 10px',
+                background: i === 0 ? 'rgba(240,192,64,0.05)' : 'transparent',
+                borderBottom: '1px solid #0f0f28',
+                borderRadius: i === 0 ? 6 : 0,
+                fontSize: 11,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>{GAME_ICONS[e.game] || '🎲'}</span>
+                  <div>
+                    <span style={{ color: '#c8c8e8', fontWeight: 600 }}>{e.username}</span>
+                    <span style={{ color: '#44446a', marginLeft: 6 }}>
+                      sur {GAME_NAMES[e.game] || e.game}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  {e.payout > 0 ? (
+                    <>
+                      <div style={{
+                        fontWeight: 700,
+                        color: isJackpot ? '#f0c040' : '#40f080',
+                      }}>
+                        +{e.payout.toLocaleString()} {isJackpot ? '🏆' : ''}
+                      </div>
+                      <div style={{ fontSize: 9, color: '#44446a' }}>
+                        ×{mult.toFixed(1)}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ color: '#444466', fontWeight: 700 }}>
+                      -{e.bet?.toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
-    </div>
-  )
-}
-
-function FeedItem({ event, isNew }) {
-  const multiplier = event.multiplier || (event.bet > 0 ? event.payout / event.bet : 0)
-  const isJackpot  = multiplier >= 10
-
-  return (
-    <div className={`flex items-center justify-between p-2 rounded-lg transition-all
-      ${isNew ? 'animate-slide-in bg-casino-gold/10 border border-casino-gold/20' : 'bg-casino-bg/60'}
-      ${isJackpot ? 'border border-yellow-400/40' : ''}`}
-    >
-      <div className="flex items-center gap-2">
-        <span className="text-lg">{GAME_ICONS[event.game] || '🎲'}</span>
-        <div>
-          <span className="text-white text-sm font-medium">{event.username}</span>
-          <span className="text-gray-500 text-xs ml-1">sur {GAME_NAMES[event.game]}</span>
-        </div>
-      </div>
-      <div className="text-right">
-        {event.payout > 0 ? (
-          <>
-            <div className={`text-sm font-bold ${isJackpot ? 'text-yellow-400' : 'text-green-400'}`}>
-              +{event.payout.toLocaleString()} {isJackpot ? '🏆' : ''}
-            </div>
-            <div className="text-xs text-gray-500">x{multiplier.toFixed(1)}</div>
-          </>
-        ) : (
-          <div className="text-sm text-gray-600">-{event.bet?.toLocaleString()}</div>
-        )}
-      </div>
     </div>
   )
 }

@@ -2,37 +2,129 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Variables globales ──────────────────────────────────────────────────────── */
+:root {
+  --fc-bg:        #07071a;
+  --fc-surface:   #0a0a20;
+  --fc-surface2:  #0f0f28;
+  --fc-border:    #1e1e40;
+  --fc-border2:   #2a2a4a;
+  --fc-gold:      #f0c040;
+  --fc-gold-dim:  #a07820;
+  --fc-text:      #d8d8f0;
+  --fc-muted:     #5a5a8a;
+  --fc-muted2:    #3a3a60;
+}
+
+body {
+  background: var(--fc-bg);
+  color: var(--fc-text);
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+/* ── Composants globaux ──────────────────────────────────────────────────────── */
 @layer components {
-  .btn-gold {
-    @apply bg-casino-gold text-black font-bold py-2 px-6 rounded-lg 
-           hover:bg-casino-gold2 transition-all duration-200 
-           disabled:opacity-40 disabled:cursor-not-allowed
-           shadow-lg hover:shadow-casino-gold/30;
+  .fc-card {
+    @apply rounded-xl border p-5;
+    background: var(--fc-surface);
+    border-color: var(--fc-border);
   }
-  .btn-outline {
-    @apply border border-casino-gold text-casino-gold font-semibold py-2 px-6 rounded-lg
-           hover:bg-casino-gold hover:text-black transition-all duration-200
+
+  .fc-card-glow {
+    @apply rounded-xl border p-5;
+    background: var(--fc-surface);
+    border-color: var(--fc-gold);
+    box-shadow: 0 0 20px rgba(240, 192, 64, 0.08);
+  }
+
+  .fc-btn-gold {
+    @apply font-bold py-2 px-6 rounded-lg transition-all duration-200
            disabled:opacity-40 disabled:cursor-not-allowed;
+    background: var(--fc-gold);
+    color: #07071a;
   }
-  .card {
-    @apply bg-casino-card border border-casino-border rounded-xl p-6;
+  .fc-btn-gold:hover:not(:disabled) {
+    background: #ffd060;
+    box-shadow: 0 0 16px rgba(240, 192, 64, 0.35);
   }
-  .input-field {
-    @apply w-full bg-casino-bg border border-casino-border rounded-lg px-4 py-3
-           text-white placeholder-gray-500 focus:outline-none focus:border-casino-gold
-           transition-colors;
+
+  .fc-btn-outline {
+    @apply font-semibold py-2 px-6 rounded-lg transition-all duration-200
+           disabled:opacity-40 disabled:cursor-not-allowed;
+    border: 1px solid var(--fc-gold);
+    color: var(--fc-gold);
+    background: transparent;
   }
+  .fc-btn-outline:hover:not(:disabled) {
+    background: rgba(240, 192, 64, 0.12);
+  }
+
+  .fc-input {
+    @apply w-full rounded-lg px-4 py-3 text-white placeholder-gray-600
+           focus:outline-none transition-colors;
+    background: var(--fc-bg);
+    border: 1px solid var(--fc-border2);
+  }
+  .fc-input:focus {
+    border-color: var(--fc-gold);
+    box-shadow: 0 0 0 2px rgba(240, 192, 64, 0.12);
+  }
+
+  /* Garder les anciens noms pour compatibilité */
+  .btn-gold     { @apply fc-btn-gold; }
+  .btn-outline  { @apply fc-btn-outline; }
+  .card         { @apply fc-card; }
+  .input-field  { @apply fc-input; }
   .badge-gold {
-    @apply inline-flex items-center gap-1 bg-casino-gold/20 text-casino-gold 
-           text-xs font-semibold px-2 py-1 rounded-full;
+    @apply inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full;
+    background: rgba(240, 192, 64, 0.12);
+    color: var(--fc-gold);
+    border: 1px solid rgba(240, 192, 64, 0.25);
   }
 }
 
-.glow-gold { box-shadow: 0 0 20px rgba(240,180,41,0.4); }
-.glow-purple { box-shadow: 0 0 20px rgba(124,58,237,0.4); }
+/* ── Utilitaires néon ────────────────────────────────────────────────────────── */
+.neon-gold   { box-shadow: 0 0 18px rgba(240, 192, 64, 0.45); }
+.neon-purple { box-shadow: 0 0 18px rgba(160, 64, 240, 0.45); }
+.neon-red    { box-shadow: 0 0 18px rgba(240, 64, 64, 0.45);  }
+.neon-green  { box-shadow: 0 0 18px rgba(64, 240, 128, 0.45); }
+.neon-blue   { box-shadow: 0 0 18px rgba(64, 128, 240, 0.45); }
+
+.glow-gold   { box-shadow: 0 0 20px rgba(240, 180, 41, 0.4); }
+.glow-purple { box-shadow: 0 0 20px rgba(124, 58, 237, 0.4); }
+
 .text-gradient {
-  background: linear-gradient(135deg, #f0b429, #ffd700, #f0b429);
+  background: linear-gradient(135deg, #f0c040, #ffd060, #f0c040);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* ── Barre de défilement ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: var(--fc-bg); }
+::-webkit-scrollbar-thumb { background: var(--fc-border2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--fc-muted); }
+
+/* ── Animations ──────────────────────────────────────────────────────────────── */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+.animate-slide-in { animation: slideIn 0.3s ease forwards; }
+.animate-fade-in  { animation: fadeIn  0.3s ease forwards; }
+.animate-float    { animation: float   3s ease-in-out infinite; }
+.animate-pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
