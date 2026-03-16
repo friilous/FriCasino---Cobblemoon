@@ -6,6 +6,7 @@ const plinko   = require('../games/plinko')
 const roulette = require('../games/roulette')
 const crash = require('../games/crash')
 const blackjack = require('../games/blackjack')
+const mines = require('../games/mines')
 
 const router = express.Router()
 const MIN_BET = 10
@@ -223,6 +224,136 @@ router.post('/blackjack', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
+
+
+// ── Mines ─────────────────────────────────────────────────────────────────────
+
+
+
+const minesSessions = {}
+ 
+router.post('/mines', authMiddleware, async (req, res) => {
+  try {
+    const { action, bet: betRaw, minesCount: minesRaw, cellIndex } = req.body
+    const userId = req.user.id
+ 
+    const userResult = await query(`SELECT * FROM users WHERE id = $1`, [userId])
+    const user = userResult.rows[0]
+ 
+    // ── Nouvelle partie ────────────────────────────────────────────────────────
+    if (action === 'start') {
+      const bet        = parseInt(betRaw)
+      const minesCount = Math.min(Math.max(parseInt(minesRaw) || 3, 1), 24)
+      const err        = validateBet(bet, user.balance)
+      if (err) return res.status(400).json({ error: err })
+ 
+      await query(`UPDATE users SET balance = $1 WHERE id = $2`, [user.balance - bet, userId])
+ 
+      const result = require('../games/mines').play(bet, minesCount, [], 'start', null)
+      minesSessions[userId] = {
+        bet,
+        minesCount,
+        mines:    result.mines,
+        revealed: [],
+        status:   'playing',
+      }
+ 
+      return res.json({
+        status:     'playing',
+        multiplier: 1.00,
+        payout:     0,
+        balance:    user.balance - bet,
+      })
+    }
+ 
+    // ── Révéler une case ───────────────────────────────────────────────────────
+    if (action === 'reveal') {
+      const session = minesSessions[userId]
+      if (!session || session.status !== 'playing')
+        return res.status(400).json({ error: 'Aucune partie en cours' })
+ 
+      const cell = parseInt(cellIndex)
+      if (session.revealed.includes(cell))
+        return res.status(400).json({ error: 'Case déjà révélée' })
+ 
+      session.revealed.push(cell)
+      const result = require('../games/mines').play(
+        session.bet, session.minesCount, session.revealed, 'reveal', session.mines
+      )
+ 
+      if (result.status === 'exploded') {
+        session.status = 'exploded'
+        await query(
+          `INSERT INTO game_history (user_id, game, bet, payout, meta) VALUES ($1, 'mines', $2, 0, $3)`,
+          [userId, session.bet, JSON.stringify({ minesCount: session.minesCount, revealed: session.revealed.length, status: 'exploded' })]
+        )
+        delete minesSessions[userId]
+        return res.json({
+          status:     'exploded',
+          mines:      result.mines,
+          multiplier: 0,
+          payout:     0,
+          balance:    user.balance,
+        })
+      }
+ 
+      if (result.status === 'won') {
+        const newBalance = user.balance + result.payout
+        await query(`UPDATE users SET balance = $1 WHERE id = $2`, [newBalance, userId])
+        await query(
+          `INSERT INTO game_history (user_id, game, bet, payout, meta) VALUES ($1, 'mines', $2, $3, $4)`,
+          [userId, session.bet, result.payout, JSON.stringify({ minesCount: session.minesCount, revealed: session.revealed.length, status: 'won' })]
+        )
+        if (result.payout >= session.bet * 5)
+          await emitLiveFeed(req.user.username, 'mines', session.bet, result.payout, result.multiplier)
+        if (global.io) global.io.to(`user_${userId}`).emit('balance_update', { balance: newBalance })
+        delete minesSessions[userId]
+        return res.json({ ...result, mines: result.mines, balance: newBalance })
+      }
+ 
+      session.status = 'playing'
+      return res.json({
+        status:     'playing',
+        multiplier: result.multiplier,
+        payout:     result.payout,
+        balance:    user.balance,
+      })
+    }
+ 
+    // ── Encaisser ──────────────────────────────────────────────────────────────
+    if (action === 'cashout') {
+      const session = minesSessions[userId]
+      if (!session || session.status !== 'playing' || session.revealed.length === 0)
+        return res.status(400).json({ error: 'Impossible d\'encaisser' })
+ 
+      const result     = require('../games/mines').play(
+        session.bet, session.minesCount, session.revealed, 'cashout', session.mines
+      )
+      const newBalance = user.balance + result.payout
+      await query(`UPDATE users SET balance = $1 WHERE id = $2`, [newBalance, userId])
+      await query(
+        `INSERT INTO game_history (user_id, game, bet, payout, meta) VALUES ($1, 'mines', $2, $3, $4)`,
+        [userId, session.bet, result.payout, JSON.stringify({ minesCount: session.minesCount, revealed: session.revealed.length, status: 'cashed' })]
+      )
+      if (result.payout >= session.bet * 3)
+        await emitLiveFeed(req.user.username, 'mines', session.bet, result.payout, result.multiplier)
+      if (global.io) global.io.to(`user_${userId}`).emit('balance_update', { balance: newBalance })
+      delete minesSessions[userId]
+      return res.json({ ...result, balance: newBalance })
+    }
+ 
+    return res.status(400).json({ error: 'Action invalide' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+ 
+
+
+
+
+
 
 
 // ── Live feed ─────────────────────────────────────────────────────────────────
