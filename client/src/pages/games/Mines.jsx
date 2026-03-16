@@ -115,7 +115,7 @@ function Cell({ index, state, onClick, disabled }) {
         <img
           src={SPRITE(VOLTORBE_DEX)}
           alt="Voltorbe"
-          style={{ width: 44, height: 44, imageRendering: 'pixelated' }}
+          style={{ width: 54, height: 54, imageRendering: 'pixelated' }}
         />
       </div>
     )
@@ -132,7 +132,7 @@ function Cell({ index, state, onClick, disabled }) {
         <img
           src={SPRITE(VOLTORBE_DEX)}
           alt="Voltorbe"
-          style={{ width: 36, height: 36, imageRendering: 'pixelated', filter: 'grayscale(0.5)' }}
+          style={{ width: 48, height: 48, imageRendering: 'pixelated', filter: 'grayscale(0.5)' }}
         />
       </div>
     )
