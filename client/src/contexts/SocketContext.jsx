@@ -43,7 +43,7 @@ export function SocketProvider({ children }) {
 
   // Charger les settings initiaux
   useEffect(() => {
-    fetch('/api/admin/game-settings')
+    fetch(import.meta.env.VITE_API_URL + '/api/admin/game-settings')
       .then(r => r.json())
       .then(data => setGameSettings(prev => ({ ...prev, ...data })))
       .catch(() => {})

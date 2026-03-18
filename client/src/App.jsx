@@ -13,6 +13,10 @@ import Blackjack from './pages/games/Blackjack'
 import Mines from './pages/games/Mines'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
+import GameGuard from './components/GameGuard'
+
+
+
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth()
@@ -47,12 +51,12 @@ function AppRoutes() {
           <Route path="/login"                 element={user ? <Navigate to="/casino" /> : <Login />} />
           <Route path="/changer-mot-de-passe"  element={<ChangePassword />} />
           <Route path="/casino"                element={<ProtectedRoute><Casino /></ProtectedRoute>} />
-          <Route path="/casino/slots"          element={<ProtectedRoute><Slots /></ProtectedRoute>} />
-          <Route path="/casino/plinko"         element={<ProtectedRoute><Plinko /></ProtectedRoute>} />
-          <Route path="/casino/roulette"       element={<ProtectedRoute><Roulette /></ProtectedRoute>} />
-          <Route path="/casino/crash"          element={<ProtectedRoute><Crash /></ProtectedRoute>} />
-          <Route path="/casino/blackjack"      element={<ProtectedRoute><Blackjack /></ProtectedRoute>} />
-          <Route path="/casino/mines"          element={<ProtectedRoute><Mines /></ProtectedRoute>} />
+          <Route path="/casino/slots"     element={<ProtectedRoute><GameGuard game="slots"><Slots /></GameGuard></ProtectedRoute>} />
+          <Route path="/casino/plinko"    element={<ProtectedRoute><GameGuard game="plinko"><Plinko /></GameGuard></ProtectedRoute>} />
+          <Route path="/casino/roulette"  element={<ProtectedRoute><GameGuard game="roulette"><Roulette /></GameGuard></ProtectedRoute>} />
+          <Route path="/casino/crash"     element={<ProtectedRoute><GameGuard game="crash"><Crash /></GameGuard></ProtectedRoute>} />
+          <Route path="/casino/blackjack" element={<ProtectedRoute><GameGuard game="blackjack"><Blackjack /></GameGuard></ProtectedRoute>} />
+          <Route path="/casino/mines"     element={<ProtectedRoute><GameGuard game="mines"><Mines /></GameGuard></ProtectedRoute>} />
           <Route path="/profil"                element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin"                 element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
           <Route path="*"                      element={<Navigate to="/" />} />
