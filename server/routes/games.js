@@ -19,6 +19,18 @@ function validateBet(bet, balance) {
   return null
 }
 
+async function checkGameEnabled(game) {
+  try {
+    const result = await query(
+      `SELECT enabled FROM game_settings WHERE game = $1`, [game]
+    )
+    if (result.rows.length === 0) return true  // pas en base = activé par défaut
+    return result.rows[0].enabled === 1 || result.rows[0].enabled === true
+  } catch {
+    return true  // en cas d'erreur DB, on laisse jouer
+  }
+}
+
 async function emitLiveFeed(username, game, bet, payout, multiplier) {
   await query(
     `INSERT INTO live_feed (username, game, bet, payout, multiplier) VALUES ($1, $2, $3, $4, $5)`,

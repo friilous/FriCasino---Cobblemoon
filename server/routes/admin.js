@@ -5,6 +5,9 @@ const { adminMiddleware } = require('../middleware/auth')
 
 const router = express.Router()
 
+// ── Jeux disponibles ──────────────────────────────────────────────────────────
+const GAMES = ['slots', 'roulette', 'crash', 'blackjack', 'mines', 'plinko']
+
 function generateTempPassword() {
   const prefixes = ['Bulbi','Salame','Cara','Pika','Magie','Florizarre','Reptincel','Aquali','Noctali','Voltali']
   const prefix = prefixes[Math.floor(Math.random() * prefixes.length)]
@@ -12,7 +15,69 @@ function generateTempPassword() {
   return `${prefix}-${num}`
 }
 
-// GET /api/admin/users
+// ── Initialiser la table game_settings si elle n'existe pas ───────────────────
+async function initGameSettings() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS game_settings (
+      game    TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 1
+    )
+  `)
+  // Insérer les jeux manquants avec enabled=1 par défaut
+  for (const game of GAMES) {
+    await query(`
+      INSERT INTO game_settings (game, enabled)
+      VALUES ($1, 1)
+      ON CONFLICT (game) DO NOTHING
+    `, [game])
+  }
+}
+initGameSettings().catch(console.error)
+
+// ── GET /api/admin/game-settings ─────────────────────────────────────────────
+router.get('/game-settings', async (req, res) => {
+  try {
+    const result = await query(`SELECT game, enabled FROM game_settings`)
+    const settings = {}
+    for (const row of result.rows) {
+      settings[row.game] = row.enabled === 1 || row.enabled === true
+    }
+    // S'assurer que tous les jeux sont présents
+    for (const game of GAMES) {
+      if (!(game in settings)) settings[game] = true
+    }
+    res.json(settings)
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ── PUT /api/admin/game-settings/:game ────────────────────────────────────────
+router.put('/game-settings/:game', adminMiddleware, async (req, res) => {
+  try {
+    const game    = req.params.game
+    const enabled = req.body.enabled ? 1 : 0
+
+    if (!GAMES.includes(game)) return res.status(400).json({ error: 'Jeu invalide' })
+
+    await query(`
+      INSERT INTO game_settings (game, enabled)
+      VALUES ($1, $2)
+      ON CONFLICT (game) DO UPDATE SET enabled = $2
+    `, [game, enabled])
+
+    // Notifier tous les clients en temps réel
+    if (global.io) {
+      global.io.emit('game_settings_update', { game, enabled: enabled === 1 })
+    }
+
+    res.json({ game, enabled: enabled === 1, message: enabled ? `${game} activé` : `${game} désactivé` })
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ── GET /api/admin/users ──────────────────────────────────────────────────────
 router.get('/users', adminMiddleware, async (req, res) => {
   try {
     const result = await query(`SELECT id, username, is_admin, is_temp_pw, balance, created_at FROM users ORDER BY created_at DESC`)
@@ -22,7 +87,7 @@ router.get('/users', adminMiddleware, async (req, res) => {
   }
 })
 
-// POST /api/admin/users
+// ── POST /api/admin/users ─────────────────────────────────────────────────────
 router.post('/users', adminMiddleware, async (req, res) => {
   try {
     const { username, initial_balance = 0 } = req.body
@@ -61,7 +126,7 @@ router.post('/users', adminMiddleware, async (req, res) => {
   }
 })
 
-// PUT /api/admin/users/:id/balance
+// ── PUT /api/admin/users/:id/balance ─────────────────────────────────────────
 router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
   try {
     const { amount, type, description } = req.body
@@ -83,13 +148,18 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
       [userId, type, parsedAmount, description || (type === 'credit' ? 'Crédit admin' : 'Débit admin')]
     )
 
+    // Notifier le joueur en temps réel
+    if (global.io) {
+      global.io.to(`user_${userId}`).emit('balance_update', { balance: newBalance })
+    }
+
     res.json({ balance: newBalance, message: 'Solde mis à jour' })
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
 
-// PUT /api/admin/users/:id/reset-password
+// ── PUT /api/admin/users/:id/reset-password ───────────────────────────────────
 router.put('/users/:id/reset-password', adminMiddleware, async (req, res) => {
   try {
     const userResult = await query(`SELECT * FROM users WHERE id = $1`, [parseInt(req.params.id)])
@@ -106,7 +176,7 @@ router.put('/users/:id/reset-password', adminMiddleware, async (req, res) => {
   }
 })
 
-// DELETE /api/admin/users/:id
+// ── DELETE /api/admin/users/:id ───────────────────────────────────────────────
 router.delete('/users/:id', adminMiddleware, async (req, res) => {
   try {
     const userId     = parseInt(req.params.id)
@@ -121,7 +191,7 @@ router.delete('/users/:id', adminMiddleware, async (req, res) => {
   }
 })
 
-// GET /api/admin/withdrawals
+// ── GET /api/admin/withdrawals ────────────────────────────────────────────────
 router.get('/withdrawals', adminMiddleware, async (req, res) => {
   try {
     const result = await query(`SELECT w.*, u.username FROM withdrawals w JOIN users u ON w.user_id = u.id ORDER BY w.created_at DESC`)
@@ -131,7 +201,7 @@ router.get('/withdrawals', adminMiddleware, async (req, res) => {
   }
 })
 
-// PUT /api/admin/withdrawals/:id
+// ── PUT /api/admin/withdrawals/:id ────────────────────────────────────────────
 router.put('/withdrawals/:id', adminMiddleware, async (req, res) => {
   try {
     const { action, admin_note } = req.body
@@ -150,7 +220,6 @@ router.put('/withdrawals/:id', adminMiddleware, async (req, res) => {
         [withdrawal.user_id, withdrawal.amount, `Retrait approuvé #${withdrawal.id}`]
       )
       res.json({ message: 'Retrait approuvé — pense à verser les Pokédollars en jeu !' })
-
     } else if (action === 'reject') {
       const userResult = await query(`SELECT balance FROM users WHERE id = $1`, [withdrawal.user_id])
       const user = userResult.rows[0]
@@ -172,7 +241,7 @@ router.put('/withdrawals/:id', adminMiddleware, async (req, res) => {
   }
 })
 
-// GET /api/admin/stats
+// ── GET /api/admin/stats ──────────────────────────────────────────────────────
 router.get('/stats', adminMiddleware, async (req, res) => {
   try {
     const [players, balances, pending, games, bets, recent] = await Promise.all([
@@ -184,7 +253,7 @@ router.get('/stats', adminMiddleware, async (req, res) => {
       query(`SELECT gh.*, u.username FROM game_history gh JOIN users u ON gh.user_id = u.id ORDER BY gh.created_at DESC LIMIT 20`),
     ])
 
-    const totalBet    = parseInt(bets.rows[0].total_bet)   || 0
+    const totalBet    = parseInt(bets.rows[0].total_bet)    || 0
     const totalPayout = parseInt(bets.rows[0].total_payout) || 0
 
     res.json({
