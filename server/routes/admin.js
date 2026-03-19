@@ -5,7 +5,6 @@ const { adminMiddleware } = require('../middleware/auth')
 
 const router = express.Router()
 
-// ── Jeux disponibles ──────────────────────────────────────────────────────────
 const GAMES = ['slots', 'roulette', 'crash', 'blackjack', 'mines', 'plinko']
 
 function generateTempPassword() {
@@ -15,7 +14,7 @@ function generateTempPassword() {
   return `${prefix}-${num}`
 }
 
-// ── Initialiser la table game_settings si elle n'existe pas ───────────────────
+// ── Init game_settings ────────────────────────────────────────────────────────
 async function initGameSettings() {
   await query(`
     CREATE TABLE IF NOT EXISTS game_settings (
@@ -23,7 +22,6 @@ async function initGameSettings() {
       enabled INTEGER NOT NULL DEFAULT 1
     )
   `)
-  // Insérer les jeux manquants avec enabled=1 par défaut
   for (const game of GAMES) {
     await query(`
       INSERT INTO game_settings (game, enabled)
@@ -42,7 +40,6 @@ router.get('/game-settings', async (req, res) => {
     for (const row of result.rows) {
       settings[row.game] = row.enabled === 1 || row.enabled === true
     }
-    // S'assurer que tous les jeux sont présents
     for (const game of GAMES) {
       if (!(game in settings)) settings[game] = true
     }
@@ -53,6 +50,7 @@ router.get('/game-settings', async (req, res) => {
 })
 
 // ── PUT /api/admin/game-settings/:game ────────────────────────────────────────
+// Désactivation gracieuse : les sessions en cours continuent (géré dans games.js)
 router.put('/game-settings/:game', adminMiddleware, async (req, res) => {
   try {
     const game    = req.params.game
@@ -66,12 +64,17 @@ router.put('/game-settings/:game', adminMiddleware, async (req, res) => {
       ON CONFLICT (game) DO UPDATE SET enabled = $2
     `, [game, enabled])
 
-    // Notifier tous les clients en temps réel
     if (global.io) {
       global.io.emit('game_settings_update', { game, enabled: enabled === 1 })
     }
 
-    res.json({ game, enabled: enabled === 1, message: enabled ? `${game} activé` : `${game} désactivé` })
+    res.json({
+      game,
+      enabled: enabled === 1,
+      message: enabled
+        ? `${game} activé`
+        : `${game} désactivé — les parties en cours peuvent se terminer normalement`,
+    })
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' })
   }
@@ -80,8 +83,26 @@ router.put('/game-settings/:game', adminMiddleware, async (req, res) => {
 // ── GET /api/admin/users ──────────────────────────────────────────────────────
 router.get('/users', adminMiddleware, async (req, res) => {
   try {
-    const result = await query(`SELECT id, username, is_admin, is_temp_pw, balance, created_at FROM users ORDER BY created_at DESC`)
-    res.json(result.rows.map(u => ({ ...u, is_admin: u.is_admin === 1, is_temp_pw: u.is_temp_pw === 1 })))
+    const result = await query(`
+      SELECT
+        u.id, u.username, u.is_admin, u.is_temp_pw, u.balance, u.created_at,
+        COUNT(gh.id) as games_played,
+        COALESCE(SUM(gh.bet), 0) as total_bet,
+        COALESCE(SUM(gh.payout), 0) as total_payout
+      FROM users u
+      LEFT JOIN game_history gh ON gh.user_id = u.id
+      GROUP BY u.id
+      ORDER BY u.created_at DESC
+    `)
+    res.json(result.rows.map(u => ({
+      ...u,
+      is_admin:   u.is_admin === 1,
+      is_temp_pw: u.is_temp_pw === 1,
+      games_played:  parseInt(u.games_played),
+      total_bet:     parseInt(u.total_bet),
+      total_payout:  parseInt(u.total_payout),
+      net_loss:      parseInt(u.total_bet) - parseInt(u.total_payout), // ce que la maison a gagné sur ce joueur
+    })))
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' })
   }
@@ -148,7 +169,6 @@ router.put('/users/:id/balance', adminMiddleware, async (req, res) => {
       [userId, type, parsedAmount, description || (type === 'credit' ? 'Crédit admin' : 'Débit admin')]
     )
 
-    // Notifier le joueur en temps réel
     if (global.io) {
       global.io.to(`user_${userId}`).emit('balance_update', { balance: newBalance })
     }
@@ -194,7 +214,12 @@ router.delete('/users/:id', adminMiddleware, async (req, res) => {
 // ── GET /api/admin/withdrawals ────────────────────────────────────────────────
 router.get('/withdrawals', adminMiddleware, async (req, res) => {
   try {
-    const result = await query(`SELECT w.*, u.username FROM withdrawals w JOIN users u ON w.user_id = u.id ORDER BY w.created_at DESC`)
+    const result = await query(`
+      SELECT w.*, u.username
+      FROM withdrawals w
+      JOIN users u ON w.user_id = u.id
+      ORDER BY w.created_at DESC
+    `)
     res.json(result.rows)
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' })
@@ -232,6 +257,7 @@ router.put('/withdrawals/:id', adminMiddleware, async (req, res) => {
         `INSERT INTO transactions (user_id, type, amount, description) VALUES ($1, 'credit', $2, $3)`,
         [withdrawal.user_id, withdrawal.amount, `Retrait refusé — jetons remboursés #${withdrawal.id}`]
       )
+      if (global.io) global.io.to(`user_${withdrawal.user_id}`).emit('balance_update', { balance: user.balance + withdrawal.amount })
       res.json({ message: 'Retrait refusé, jetons remboursés au joueur' })
     } else {
       res.status(400).json({ error: 'Action invalide' })
@@ -241,16 +267,161 @@ router.put('/withdrawals/:id', adminMiddleware, async (req, res) => {
   }
 })
 
+// ── GET /api/admin/bets — TOUS les paris (filtrable) ─────────────────────────
+// Filtres : game, filter (all|wins|losses|big_wins), userId, limit, offset
+router.get('/bets', adminMiddleware, async (req, res) => {
+  try {
+    const { game, filter = 'all', userId, limit = 100, offset = 0, search } = req.query
+    const params  = []
+    const clauses = []
+
+    if (game && GAMES.includes(game)) {
+      params.push(game)
+      clauses.push(`gh.game = $${params.length}`)
+    }
+    if (userId) {
+      params.push(parseInt(userId))
+      clauses.push(`gh.user_id = $${params.length}`)
+    }
+    if (search) {
+      params.push(`%${search.toLowerCase()}%`)
+      clauses.push(`LOWER(u.username) LIKE $${params.length}`)
+    }
+    if (filter === 'wins') clauses.push('gh.payout > gh.bet')
+    if (filter === 'losses') clauses.push('gh.payout < gh.bet')
+    if (filter === 'big_wins') clauses.push('gh.payout >= gh.bet * 2')
+
+    const whereSQL = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
+
+    const result = await query(`
+      SELECT
+        gh.id,
+        CONCAT('#', UPPER(SUBSTRING(gh.game, 1, 3)), '-', LPAD(gh.id::text, 6, '0')) as bet_id,
+        u.username,
+        gh.game,
+        gh.bet,
+        gh.payout,
+        gh.payout - gh.bet as profit,
+        gh.meta,
+        gh.created_at
+      FROM game_history gh
+      JOIN users u ON gh.user_id = u.id
+      ${whereSQL}
+      ORDER BY gh.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `, [...params, parseInt(limit), parseInt(offset)])
+
+    const countResult = await query(
+      `SELECT COUNT(*) as total FROM game_history gh JOIN users u ON gh.user_id = u.id ${whereSQL}`,
+      params
+    )
+
+    res.json({
+      bets:  result.rows,
+      total: parseInt(countResult.rows[0].total),
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ── GET /api/admin/players/:id/history — Historique d'un joueur ──────────────
+router.get('/players/:id/history', adminMiddleware, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id)
+    const { filter = 'all', limit = 50, offset = 0 } = req.query
+
+    const params  = [userId]
+    const clauses = [`gh.user_id = $1`]
+
+    if (filter === 'wins')     clauses.push('gh.payout > gh.bet')
+    if (filter === 'losses')   clauses.push('gh.payout < gh.bet')
+    if (filter === 'big_wins') clauses.push('gh.payout >= gh.bet * 2')
+
+    const whereSQL = `WHERE ${clauses.join(' AND ')}`
+
+    const [userResult, histResult, statsResult] = await Promise.all([
+      query(`SELECT id, username, balance, created_at FROM users WHERE id = $1`, [userId]),
+      query(`
+        SELECT
+          gh.id,
+          CONCAT('#', UPPER(SUBSTRING(gh.game, 1, 3)), '-', LPAD(gh.id::text, 6, '0')) as bet_id,
+          gh.game, gh.bet, gh.payout,
+          gh.payout - gh.bet as profit,
+          gh.meta, gh.created_at
+        FROM game_history gh
+        ${whereSQL}
+        ORDER BY gh.created_at DESC
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      `, [...params, parseInt(limit), parseInt(offset)]),
+      query(`
+        SELECT
+          COUNT(*) as games_played,
+          COALESCE(SUM(bet), 0) as total_bet,
+          COALESCE(SUM(payout), 0) as total_payout,
+          COALESCE(MAX(payout), 0) as biggest_win,
+          COALESCE(MAX(payout - bet), 0) as biggest_profit
+        FROM game_history WHERE user_id = $1
+      `, [userId]),
+    ])
+
+    if (!userResult.rows[0]) return res.status(404).json({ error: 'Joueur introuvable' })
+
+    const stats = statsResult.rows[0]
+    res.json({
+      user:    userResult.rows[0],
+      history: histResult.rows,
+      stats: {
+        games_played:   parseInt(stats.games_played),
+        total_bet:      parseInt(stats.total_bet),
+        total_payout:   parseInt(stats.total_payout),
+        net_loss:       parseInt(stats.total_bet) - parseInt(stats.total_payout),
+        biggest_win:    parseInt(stats.biggest_win),
+        biggest_profit: parseInt(stats.biggest_profit),
+      },
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
 router.get('/stats', adminMiddleware, async (req, res) => {
   try {
-    const [players, balances, pending, games, bets, recent] = await Promise.all([
+    const [players, balances, pending, games, bets, byGame, topWinners, topLosers] = await Promise.all([
       query(`SELECT COUNT(*) as count FROM users WHERE is_admin = 0`),
       query(`SELECT SUM(balance) as total FROM users WHERE is_admin = 0`),
       query(`SELECT COUNT(*) as count, SUM(amount) as total FROM withdrawals WHERE status = 'pending'`),
       query(`SELECT COUNT(*) as count FROM game_history`),
       query(`SELECT SUM(bet) as total_bet, SUM(payout) as total_payout FROM game_history`),
-      query(`SELECT gh.*, u.username FROM game_history gh JOIN users u ON gh.user_id = u.id ORDER BY gh.created_at DESC LIMIT 20`),
+      // Stats par jeu
+      query(`
+        SELECT game,
+          COUNT(*) as plays,
+          SUM(bet) as total_bet,
+          SUM(payout) as total_payout,
+          ROUND(SUM(payout)::numeric / NULLIF(SUM(bet), 0) * 100, 2) as actual_rtp
+        FROM game_history
+        GROUP BY game
+        ORDER BY total_bet DESC
+      `),
+      // Top 5 plus gros gains
+      query(`
+        SELECT gh.id, u.username, gh.game, gh.bet, gh.payout, gh.payout - gh.bet as profit, gh.created_at,
+          CONCAT('#', UPPER(SUBSTRING(gh.game, 1, 3)), '-', LPAD(gh.id::text, 6, '0')) as bet_id
+        FROM game_history gh JOIN users u ON gh.user_id = u.id
+        ORDER BY gh.payout DESC LIMIT 5
+      `),
+      // Top 5 plus grosses pertes
+      query(`
+        SELECT gh.id, u.username, gh.game, gh.bet, gh.payout, gh.bet - gh.payout as loss, gh.created_at,
+          CONCAT('#', UPPER(SUBSTRING(gh.game, 1, 3)), '-', LPAD(gh.id::text, 6, '0')) as bet_id
+        FROM game_history gh JOIN users u ON gh.user_id = u.id
+        WHERE gh.payout = 0
+        ORDER BY gh.bet DESC LIMIT 5
+      `),
     ])
 
     const totalBet    = parseInt(bets.rows[0].total_bet)    || 0
@@ -261,8 +432,13 @@ router.get('/stats', adminMiddleware, async (req, res) => {
       totalBalance:       parseInt(balances.rows[0].total) || 0,
       pendingWithdrawals: { count: parseInt(pending.rows[0].count), total: parseInt(pending.rows[0].total) || 0 },
       gamesPlayed:        parseInt(games.rows[0].count),
+      totalBet,
+      totalPayout,
+      houseProfit:        totalBet - totalPayout,
       houseEdge:          totalBet > 0 ? (((totalBet - totalPayout) / totalBet) * 100).toFixed(2) : 0,
-      recentGames:        recent.rows,
+      byGame:             byGame.rows,
+      topWinners:         topWinners.rows,
+      topLosers:          topLosers.rows,
     })
   } catch (err) {
     console.error(err)

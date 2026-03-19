@@ -1,28 +1,48 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { Link } from 'react-router-dom'
 import { useSocket } from '../contexts/SocketContext'
 
+const GAMES_LIST = [
+  { id: 'slots',     label: 'Slot Machine',     icon: '🎰' },
+  { id: 'roulette',  label: 'Roulette Pokémon', icon: '🎯' },
+  { id: 'crash',     label: 'Crash',            icon: '📈' },
+  { id: 'blackjack', label: 'Blackjack',        icon: '🃏' },
+  { id: 'mines',     label: 'Mines',            icon: '💣' },
+  { id: 'plinko',    label: 'Plinko',           icon: '🪀' },
+]
+
+const BET_FILTERS = [
+  { id: 'all',      label: 'Tous' },
+  { id: 'wins',     label: '✅ Gains' },
+  { id: 'losses',   label: '❌ Pertes' },
+  { id: 'big_wins', label: '🔥 Gros gains (×2+)' },
+]
+
 export default function Admin() {
-  const [tab, setTab] = useState('users')
-  const [users, setUsers] = useState([])
-  const [withdrawals, setWithdrawals] = useState([])
-  const [stats, setStats] = useState(null)
-  const [gameSettings, setGameSettings] = useState({ slots: true, plinko: true, roulette: true })
-  const [loading, setLoading] = useState(false)
+  const [tab,          setTab]          = useState('stats')
+  const [users,        setUsers]        = useState([])
+  const [withdrawals,  setWithdrawals]  = useState([])
+  const [stats,        setStats]        = useState(null)
+  const [gameSettings, setGameSettings] = useState({})
+  const [bets,         setBets]         = useState([])
+  const [betsTotal,    setBetsTotal]    = useState(0)
+  const [betsFilter,   setBetsFilter]   = useState('all')
+  const [betsGame,     setBetsGame]     = useState('')
+  const [betsSearch,   setBetsSearch]   = useState('')
+  const [betsPage,     setBetsPage]     = useState(0)
+  const [betsLoading,  setBetsLoading]  = useState(false)
+  const [playerModal,  setPlayerModal]  = useState(null) // { id, username }
+  const [playerData,   setPlayerData]   = useState(null)
   const { liveFeed, socket } = useSocket()
 
-  // Notifications de retrait en temps réel
-  const [newWithdrawals, setNewWithdrawals] = useState(0)
-  useEffect(() => {
-    if (!socket) return
-    socket.on('new_withdrawal', () => {
-      setNewWithdrawals(n => n + 1)
-      loadWithdrawals()
-    })
-    return () => socket.off('new_withdrawal')
-  }, [socket])
+  const LIMIT = 50
 
   useEffect(() => { loadAll() }, [])
+
+  useEffect(() => {
+    if (tab === 'bets') loadBets()
+  }, [tab, betsFilter, betsGame, betsPage])
 
   async function loadAll() {
     loadUsers(); loadWithdrawals(); loadStats(); loadGameSettings()
@@ -46,240 +66,505 @@ export default function Admin() {
   }
 
   async function loadUsers() {
-    const { data } = await axios.get('/api/admin/users')
-    setUsers(data)
+    try { const { data } = await axios.get('/api/admin/users'); setUsers(data) } catch {}
   }
 
   async function loadWithdrawals() {
-    setNewWithdrawals(0)
-    const { data } = await axios.get('/api/admin/withdrawals')
-    setWithdrawals(data)
+    try { const { data } = await axios.get('/api/admin/withdrawals'); setWithdrawals(data) } catch {}
   }
 
   async function loadStats() {
-    const { data } = await axios.get('/api/admin/stats')
-    setStats(data)
+    try { const { data } = await axios.get('/api/admin/stats'); setStats(data) } catch {}
   }
 
+  async function loadBets() {
+    setBetsLoading(true)
+    try {
+      const params = { filter: betsFilter, limit: LIMIT, offset: betsPage * LIMIT }
+      if (betsGame) params.game = betsGame
+      if (betsSearch) params.search = betsSearch
+      const { data } = await axios.get('/api/admin/bets', { params })
+      setBets(data.bets); setBetsTotal(data.total)
+    } catch {}
+    setBetsLoading(false)
+  }
+
+  async function openPlayerModal(user) {
+    setPlayerModal(user); setPlayerData(null)
+    try {
+      const { data } = await axios.get(`/api/admin/players/${user.id}/history`, { params: { limit: 20 } })
+      setPlayerData(data)
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (!socket) return
+    socket.on('new_withdrawal', () => { loadWithdrawals() })
+    return () => socket.off('new_withdrawal')
+  }, [socket])
+
   const pendingCount = withdrawals.filter(w => w.status === 'pending').length
+  const totalPages   = Math.ceil(betsTotal / LIMIT)
 
   return (
-    <div className="min-h-screen bg-casino-bg py-10 px-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="font-casino text-3xl font-bold text-white">⚙️ Panel Admin</h1>
-          <button onClick={loadAll} className="btn-outline text-sm py-2">🔄 Actualiser</button>
+    <div style={{ padding: '24px 28px', minHeight: '100vh', background: '#07071a' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#d8d8f0', margin: 0 }}>⚙️ Panel Admin</h1>
+          <button onClick={loadAll} style={{
+            background: 'transparent', border: '1px solid #2a2a4a',
+            color: '#9898b8', padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
+          }}>🔄 Actualiser</button>
         </div>
 
-        {/* Stats */}
+        {/* Stats rapides */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
             {[
-              { label: 'Joueurs', value: stats.totalPlayers, icon: '👤' },
-              { label: 'Jetons en circulation', value: stats.totalBalance?.toLocaleString(), icon: '🪙' },
-              { label: 'Parties jouées', value: stats.gamesPlayed?.toLocaleString(), icon: '🎮' },
-              { label: 'Avantage maison', value: `${stats.houseEdge}%`, icon: '📊' },
+              { label: 'Joueurs',          value: stats.totalPlayers,                  icon: '👤', color: '#d8d8f0' },
+              { label: 'Jetons circulants', value: stats.totalBalance?.toLocaleString(), icon: '🪙', color: '#f0c040' },
+              { label: 'Parties jouées',   value: stats.gamesPlayed?.toLocaleString(),  icon: '🎮', color: '#d8d8f0' },
+              { label: 'Profit maison',    value: stats.houseProfit?.toLocaleString(),  icon: '💰', color: '#40f080' },
+              { label: 'House edge réel',  value: `${stats.houseEdge}%`,               icon: '📊', color: '#f0c040' },
             ].map(s => (
-              <div key={s.label} className="card text-center">
-                <div className="text-2xl mb-1">{s.icon}</div>
-                <div className="text-casino-gold font-bold text-xl">{s.value}</div>
-                <div className="text-gray-500 text-xs">{s.label}</div>
+              <div key={s.label} style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 10, padding: '12px 14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: 9, color: '#44446a', marginTop: 2 }}>{s.label}</div>
               </div>
             ))}
           </div>
         )}
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-casino-border pb-4">
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid #1e1e40', paddingBottom: 10 }}>
           {[
-            { id: 'users', label: '👤 Joueurs' },
-            { id: 'create', label: '➕ Créer un compte' },
-            { id: 'withdrawals', label: `💸 Retraits ${pendingCount > 0 ? `(${pendingCount})` : ''}` },
-            { id: 'live', label: '📺 Live' },
+            { id: 'stats',       label: '📊 Stats' },
+            { id: 'machines',    label: '🎮 Machines' },
+            { id: 'users',       label: `👤 Joueurs (${users.length})` },
+            { id: 'create',      label: '➕ Créer compte' },
+            { id: 'withdrawals', label: `💸 Retraits${pendingCount > 0 ? ` (${pendingCount})` : ''}` },
+            { id: 'bets',        label: '🎲 Tous les paris' },
+            { id: 'live',        label: '📺 Live' },
           ].map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                ${tab === t.id ? 'bg-casino-purple/30 text-casino-purple2 border border-casino-purple/50' : 'text-gray-400 hover:text-white'}`}>
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', border: 'none',
+              background: tab === t.id ? 'rgba(240,192,64,0.12)' : 'transparent',
+              color: tab === t.id ? '#f0c040' : '#5a5a8a',
+            }}>
               {t.label}
             </button>
           ))}
         </div>
 
-        {/* Users tab */}
-        {tab === 'users' && <UsersTab users={users} onRefresh={loadUsers} />}
-        {tab === 'create' && <CreateUserTab onCreated={loadUsers} />}
+        {tab === 'stats'       && <StatsTab stats={stats} />}
+        {tab === 'machines'    && <MachinesTab gameSettings={gameSettings} toggleGame={toggleGame} />}
+        {tab === 'users'       && <UsersTab users={users} onRefresh={loadUsers} onOpenPlayer={openPlayerModal} />}
+        {tab === 'create'      && <CreateUserTab onCreated={loadUsers} />}
         {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onRefresh={loadWithdrawals} />}
-        {tab === 'live' && <LiveTab liveFeed={liveFeed} stats={stats} gameSettings={gameSettings} toggleGame={toggleGame} />}
+        {tab === 'live'        && <LiveTab liveFeed={liveFeed} />}
+        {tab === 'bets' && (
+          <BetsTab
+            bets={bets} betsTotal={betsTotal} betsLoading={betsLoading}
+            filter={betsFilter} setFilter={f => { setBetsFilter(f); setBetsPage(0) }}
+            game={betsGame} setGame={g => { setBetsGame(g); setBetsPage(0) }}
+            search={betsSearch} setSearch={setBetsSearch}
+            page={betsPage} setPage={setBetsPage} totalPages={totalPages}
+            onSearch={() => { setBetsPage(0); loadBets() }}
+          />
+        )}
       </div>
+
+      {/* Modal profil joueur */}
+      {playerModal && (
+        <PlayerModal
+          user={playerModal}
+          data={playerData}
+          onClose={() => { setPlayerModal(null); setPlayerData(null) }}
+        />
+      )}
     </div>
   )
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function UsersTab({ users, onRefresh }) {
-  const [selected, setSelected] = useState(null)
-  const [creditAmount, setCreditAmount] = useState('')
-  const [creditType, setCreditType] = useState('credit')
-  const [creditDesc, setCreditDesc] = useState('')
-  const [msg, setMsg] = useState('')
-  const [resetMsg, setResetMsg] = useState('')
-
-  async function handleCredit(e) {
-    e.preventDefault()
-    setMsg('')
-    try {
-      await axios.put(`/api/admin/users/${selected.id}/balance`, {
-        amount: parseInt(creditAmount), type: creditType, description: creditDesc
-      })
-      setMsg(`✅ Solde mis à jour`)
-      setCreditAmount('')
-      setCreditDesc('')
-      onRefresh()
-    } catch (err) {
-      setMsg(`❌ ${err.response?.data?.error || 'Erreur'}`)
-    }
-  }
-
-  async function handleReset(userId) {
-    try {
-      const { data } = await axios.put(`/api/admin/users/${userId}/reset-password`)
-      setResetMsg(`Nouveau mdp provisoire : ${data.temp_password}`)
-    } catch (err) {
-      setResetMsg(`Erreur : ${err.response?.data?.error}`)
-    }
-  }
-
-  async function handleDelete(userId) {
-    if (!confirm('Supprimer ce compte ?')) return
-    await axios.delete(`/api/admin/users/${userId}`)
-    onRefresh()
-  }
-
+// ── Stats globales ────────────────────────────────────────────────────────────
+function StatsTab({ stats }) {
+  if (!stats) return <div style={{ textAlign: 'center', color: '#2e2e50', padding: 40 }}>Chargement...</div>
   return (
-    <div className="grid lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 card overflow-x-auto">
-        <h2 className="font-bold text-white mb-4">Tous les comptes ({users.length})</h2>
-        <table className="w-full text-sm">
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      {/* Stats par jeu */}
+      <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: '0 0 14px' }}>📊 Stats par jeu</h2>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
           <thead>
-            <tr className="text-gray-500 border-b border-casino-border">
-              <th className="text-left py-2">Pseudo</th>
-              <th className="text-right py-2">Solde</th>
-              <th className="text-center py-2">Statut mdp</th>
-              <th className="text-center py-2">Actions</th>
+            <tr style={{ borderBottom: '1px solid #1e1e40' }}>
+              {['Jeu', 'Parties', 'Misé', 'Payé', 'RTP réel'].map(h => (
+                <th key={h} style={{ padding: '6px 8px', textAlign: h === 'Jeu' ? 'left' : 'right', color: '#44446a', fontWeight: 600 }}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {users.map(u => (
-              <tr key={u.id} className={`border-b border-casino-border/50 hover:bg-casino-border/20 cursor-pointer ${selected?.id === u.id ? 'bg-casino-gold/5' : ''}`}
-                onClick={() => setSelected(u)}>
-                <td className="py-2 font-medium text-white">{u.username}</td>
-                <td className="py-2 text-right text-casino-gold font-bold">{u.balance.toLocaleString()}</td>
-                <td className="py-2 text-center">
-                  {u.is_temp_pw
-                    ? <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">Provisoire</span>
-                    : <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">Changé</span>}
+            {(stats.byGame || []).map(g => (
+              <tr key={g.game} style={{ borderBottom: '1px solid #0f0f28' }}>
+                <td style={{ padding: '7px 8px', color: '#c8c8e8', fontWeight: 600 }}>
+                  {({ slots:'🎰', plinko:'🪀', roulette:'🎯', crash:'📈', blackjack:'🃏', mines:'💣' })[g.game] || '🎲'} {g.game}
                 </td>
-                <td className="py-2 text-center">
-                  <button onClick={(e) => { e.stopPropagation(); handleReset(u.id) }}
-                    className="text-xs text-blue-400 hover:text-blue-300 mr-2">Reset mdp</button>
-                  <button onClick={(e) => { e.stopPropagation(); handleDelete(u.id) }}
-                    className="text-xs text-red-400 hover:text-red-300">Supprimer</button>
+                <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9898b8' }}>{parseInt(g.plays).toLocaleString()}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9898b8' }}>{parseInt(g.total_bet).toLocaleString()}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9898b8' }}>{parseInt(g.total_payout).toLocaleString()}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: parseFloat(g.actual_rtp) < 93 ? '#40f080' : '#f06060' }}>
+                  {g.actual_rtp}%
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {resetMsg && <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/30 text-blue-400 text-sm rounded">{resetMsg}</div>}
       </div>
 
-      {/* Credit panel */}
-      {selected && (
-        <div className="card border-casino-gold/30">
-          <h3 className="font-bold text-casino-gold mb-4">Modifier : {selected.username}</h3>
-          <div className="mb-3 p-2 bg-casino-bg rounded">
-            <span className="text-gray-400 text-sm">Solde actuel : </span>
-            <span className="text-casino-gold font-bold">{selected.balance.toLocaleString()} jetons</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Top gains */}
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: '#f0c040', margin: '0 0 12px' }}>🔥 Plus gros gains</h2>
+          {(stats.topWinners || []).map((w, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #0f0f28', fontSize: 11 }}>
+              <div>
+                <span style={{ color: '#c8c8e8', fontWeight: 600 }}>{w.username}</span>
+                <span style={{ color: '#44446a', marginLeft: 8 }}>{w.game} · {w.bet_id}</span>
+              </div>
+              <span style={{ fontWeight: 800, color: '#40f080' }}>+{parseInt(w.profit).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Top pertes */}
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: '#f06060', margin: '0 0 12px' }}>💀 Plus grosses pertes</h2>
+          {(stats.topLosers || []).map((w, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #0f0f28', fontSize: 11 }}>
+              <div>
+                <span style={{ color: '#c8c8e8', fontWeight: 600 }}>{w.username}</span>
+                <span style={{ color: '#44446a', marginLeft: 8 }}>{w.game} · {w.bet_id}</span>
+              </div>
+              <span style={{ fontWeight: 800, color: '#f06060' }}>-{parseInt(w.loss).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Machines ──────────────────────────────────────────────────────────────────
+function MachinesTab({ gameSettings, toggleGame }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+      {GAMES_LIST.map(game => {
+        const on = gameSettings[game.id] !== false
+        return (
+          <div key={game.id} style={{
+            background: '#0a0a20', border: `1px solid ${on ? '#1e3020' : '#2a1a1a'}`,
+            borderRadius: 10, padding: '14px 18px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 26 }}>{game.icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0' }}>{game.label}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: on ? '#40f080' : '#f06060', marginTop: 2 }}>
+                  {on ? '✅ Active' : '🔧 Désactivée'}
+                </div>
+                {!on && (
+                  <div style={{ fontSize: 9, color: '#44446a', marginTop: 2 }}>
+                    Les parties en cours peuvent se terminer
+                  </div>
+                )}
+              </div>
+            </div>
+            <button onClick={() => toggleGame(game.id)} style={{
+              padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', border: '1px solid',
+              borderColor: on ? 'rgba(240,64,64,0.4)' : 'rgba(64,240,128,0.4)',
+              background: on ? 'rgba(240,64,64,0.08)' : 'rgba(64,240,128,0.08)',
+              color: on ? '#f06060' : '#40f080',
+            }}>
+              {on ? 'Désactiver' : 'Réactiver'}
+            </button>
           </div>
-          <form onSubmit={handleCredit} className="space-y-3">
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setCreditType('credit')}
-                className={`flex-1 py-1.5 rounded text-xs font-bold transition-colors ${creditType === 'credit' ? 'bg-green-600 text-white' : 'bg-casino-bg text-gray-400 border border-casino-border'}`}>
-                + Créditer
-              </button>
-              <button type="button" onClick={() => setCreditType('debit')}
-                className={`flex-1 py-1.5 rounded text-xs font-bold transition-colors ${creditType === 'debit' ? 'bg-red-600 text-white' : 'bg-casino-bg text-gray-400 border border-casino-border'}`}>
-                - Débiter
-              </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Tous les paris ────────────────────────────────────────────────────────────
+function BetsTab({ bets, betsTotal, betsLoading, filter, setFilter, game, setGame, search, setSearch, page, setPage, totalPages, onSearch }) {
+  const GAME_ICONS = { slots:'🎰', plinko:'🪀', roulette:'🎯', crash:'📈', blackjack:'🃏', mines:'💣' }
+
+  return (
+    <div>
+      {/* Filtres */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {BET_FILTERS.map(f => (
+            <button key={f.id} onClick={() => setFilter(f.id)} style={{
+              padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 600,
+              cursor: 'pointer', border: filter === f.id ? '1px solid rgba(240,192,64,0.4)' : '1px solid #2a2a4a',
+              background: filter === f.id ? 'rgba(240,192,64,0.12)' : 'transparent',
+              color: filter === f.id ? '#f0c040' : '#5a5a8a',
+            }}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <select value={game} onChange={e => setGame(e.target.value)} style={{
+          background: '#0a0a20', border: '1px solid #2a2a4a', borderRadius: 7,
+          color: '#9898b8', padding: '5px 10px', fontSize: 11, cursor: 'pointer',
+        }}>
+          <option value="">Tous les jeux</option>
+          {GAMES_LIST.map(g => <option key={g.id} value={g.id}>{g.icon} {g.label}</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && onSearch()}
+            placeholder="Rechercher un joueur..."
+            style={{ background: '#0a0a20', border: '1px solid #2a2a4a', borderRadius: 7, color: '#c8c8e8', padding: '5px 10px', fontSize: 11, outline: 'none' }} />
+          <button onClick={onSearch} style={{ background: '#f0c040', color: '#07071a', fontWeight: 700, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11 }}>
+            Rechercher
+          </button>
+        </div>
+        <span style={{ fontSize: 10, color: '#44446a' }}>{betsTotal.toLocaleString()} résultats</span>
+      </div>
+
+      <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+        {betsLoading ? (
+          <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0', fontSize: 12 }}>Chargement...</div>
+        ) : bets.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0', fontSize: 12 }}>Aucun pari trouvé</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #1e1e40' }}>
+                  {['#BetID', 'Joueur', 'Jeu', 'Mise', 'Gain', 'Résultat', 'Date'].map(h => (
+                    <th key={h} style={{ padding: '8px 10px', textAlign: h === '#BetID' || h === 'Joueur' || h === 'Jeu' ? 'left' : 'right', color: '#44446a', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {bets.map(b => (
+                  <tr key={b.id} style={{ borderBottom: '1px solid #0f0f28' }}>
+                    <td style={{ padding: '7px 10px', fontFamily: 'monospace', fontSize: 10, color: '#5a5a8a' }}>{b.bet_id}</td>
+                    <td style={{ padding: '7px 10px', color: '#c8c8e8', fontWeight: 600 }}>{b.username}</td>
+                    <td style={{ padding: '7px 10px', color: '#9898b8' }}>{GAME_ICONS[b.game] || '🎲'} {b.game}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: '#9898b8' }}>{parseInt(b.bet).toLocaleString()}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: '#9898b8' }}>{parseInt(b.payout).toLocaleString()}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: b.profit > 0 ? '#40f080' : b.profit < 0 ? '#f06060' : '#8888cc' }}>
+                      {b.profit > 0 ? '+' : ''}{parseInt(b.profit).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', fontSize: 10, color: '#44446a' }}>
+                      {new Date(b.created_at).toLocaleString('fr')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 14 }}>
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+              style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #2a2a4a', background: 'transparent', color: page === 0 ? '#2a2a4a' : '#9898b8', cursor: page === 0 ? 'not-allowed' : 'pointer', fontSize: 11 }}>
+              ← Préc
+            </button>
+            <span style={{ padding: '5px 12px', fontSize: 11, color: '#5a5a8a' }}>{page + 1} / {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+              style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #2a2a4a', background: 'transparent', color: page >= totalPages - 1 ? '#2a2a4a' : '#9898b8', cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer', fontSize: 11 }}>
+              Suiv →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+function UsersTab({ users, onRefresh, onOpenPlayer }) {
+  const [selected,    setSelected]    = useState(null)
+  const [creditAmount,setCreditAmount]= useState('')
+  const [creditType,  setCreditType]  = useState('credit')
+  const [creditDesc,  setCreditDesc]  = useState('')
+  const [msg,         setMsg]         = useState('')
+  const [resetMsg,    setResetMsg]    = useState('')
+
+  async function handleCredit(e) {
+    e.preventDefault(); setMsg('')
+    try {
+      await axios.put(`/api/admin/users/${selected.id}/balance`, { amount: parseInt(creditAmount), type: creditType, description: creditDesc })
+      setMsg('✅ Solde mis à jour'); setCreditAmount(''); setCreditDesc(''); onRefresh()
+    } catch (err) { setMsg(`❌ ${err.response?.data?.error || 'Erreur'}`) }
+  }
+
+  async function handleReset(userId) {
+    try {
+      const { data } = await axios.put(`/api/admin/users/${userId}/reset-password`)
+      setResetMsg(`Nouveau mdp : ${data.temp_password}`)
+    } catch (err) { setResetMsg(`Erreur : ${err.response?.data?.error}`) }
+  }
+
+  async function handleDelete(userId) {
+    if (!confirm('Supprimer ce compte ?')) return
+    await axios.delete(`/api/admin/users/${userId}`); onRefresh()
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
+      <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18, overflowX: 'auto' }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: '0 0 12px' }}>
+          Tous les comptes ({users.length})
+        </h2>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #1e1e40' }}>
+              {['Pseudo', 'Solde', 'Parties', 'Net casino', 'Mdp', 'Actions'].map(h => (
+                <th key={h} style={{ padding: '7px 8px', textAlign: h === 'Pseudo' ? 'left' : 'right', color: '#44446a', fontWeight: 600 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id} style={{
+                borderBottom: '1px solid #0f0f28',
+                background: selected?.id === u.id ? 'rgba(240,192,64,0.03)' : 'transparent',
+                cursor: 'pointer',
+              }} onClick={() => setSelected(u)}>
+                <td style={{ padding: '8px 8px' }}>
+                  <button onClick={e => { e.stopPropagation(); onOpenPlayer(u) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8c8e8', fontWeight: 600, fontSize: 11, padding: 0, textDecoration: 'underline', textDecorationColor: '#2a2a4a' }}>
+                    {u.username}
+                  </button>
+                </td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', color: '#f0c040', fontWeight: 700 }}>{parseInt(u.balance).toLocaleString()}</td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', color: '#9898b8' }}>{u.games_played || 0}</td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, color: u.net_loss > 0 ? '#40f080' : '#f06060' }}>
+                  {u.net_loss > 0 ? '+' : ''}{(u.net_loss || 0).toLocaleString()}
+                </td>
+                <td style={{ padding: '8px 8px', textAlign: 'right' }}>
+                  <span style={{
+                    fontSize: 9, padding: '1px 6px', borderRadius: 8,
+                    background: u.is_temp_pw ? 'rgba(240,192,64,0.1)' : 'rgba(64,240,128,0.1)',
+                    color: u.is_temp_pw ? '#f0c040' : '#40f080',
+                  }}>
+                    {u.is_temp_pw ? 'Provisoire' : 'OK'}
+                  </span>
+                </td>
+                <td style={{ padding: '8px 8px', textAlign: 'right' }}>
+                  <button onClick={e => { e.stopPropagation(); handleReset(u.id) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#4080f0', marginRight: 6 }}>
+                    Reset mdp
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); handleDelete(u.id) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#f06060' }}>
+                    Supprimer
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {resetMsg && <div style={{ marginTop: 10, padding: '7px 12px', background: 'rgba(64,128,240,0.08)', border: '1px solid rgba(64,128,240,0.2)', borderRadius: 6, fontSize: 11, color: '#6090f0' }}>{resetMsg}</div>}
+      </div>
+
+      {selected && (
+        <div style={{ background: '#0a0a20', border: '1px solid rgba(240,192,64,0.25)', borderRadius: 12, padding: 18 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#f0c040', margin: '0 0 10px' }}>Modifier : {selected.username}</h3>
+          <div style={{ padding: '8px 12px', background: '#07071a', borderRadius: 7, marginBottom: 14 }}>
+            <span style={{ fontSize: 11, color: '#44446a' }}>Solde : </span>
+            <span style={{ color: '#f0c040', fontWeight: 700 }}>{parseInt(selected.balance).toLocaleString()} jetons</span>
+          </div>
+          <form onSubmit={handleCredit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" onClick={() => setCreditType('credit')} style={{
+                flex: 1, padding: '7px', borderRadius: 7, fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', border: 'none',
+                background: creditType === 'credit' ? '#16a34a' : '#1a1a3a', color: '#fff',
+              }}>+ Créditer</button>
+              <button type="button" onClick={() => setCreditType('debit')} style={{
+                flex: 1, padding: '7px', borderRadius: 7, fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', border: 'none',
+                background: creditType === 'debit' ? '#dc2626' : '#1a1a3a', color: '#fff',
+              }}>- Débiter</button>
             </div>
             <input type="number" value={creditAmount} onChange={e => setCreditAmount(e.target.value)}
-              placeholder="Montant" className="input-field" required min={1} />
+              placeholder="Montant" required min={1}
+              style={{ background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 7, padding: '8px 12px', color: '#d8d8f0', fontSize: 12, outline: 'none' }} />
             <input type="text" value={creditDesc} onChange={e => setCreditDesc(e.target.value)}
-              placeholder="Raison (optionnel)" className="input-field" />
-            <button type="submit" className="btn-gold w-full py-2">Confirmer</button>
+              placeholder="Raison (optionnel)"
+              style={{ background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 7, padding: '8px 12px', color: '#d8d8f0', fontSize: 12, outline: 'none' }} />
+            <button type="submit" style={{ background: '#f0c040', color: '#07071a', fontWeight: 800, padding: '10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13 }}>
+              Confirmer
+            </button>
           </form>
-          {msg && <p className="mt-2 text-sm text-center text-gray-300">{msg}</p>}
+          {msg && <p style={{ marginTop: 8, fontSize: 11, color: '#9898b8', textAlign: 'center' }}>{msg}</p>}
         </div>
       )}
     </div>
   )
 }
 
+// ── Create user ───────────────────────────────────────────────────────────────
 function CreateUserTab({ onCreated }) {
   const [username, setUsername] = useState('')
-  const [balance, setBalance] = useState('')
-  const [result, setResult] = useState(null)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [balance,  setBalance]  = useState('')
+  const [result,   setResult]   = useState(null)
+  const [error,    setError]    = useState('')
+  const [loading,  setLoading]  = useState(false)
 
   async function handleCreate(e) {
-    e.preventDefault()
-    setError(''); setResult(null); setLoading(true)
+    e.preventDefault(); setError(''); setResult(null); setLoading(true)
     try {
       const { data } = await axios.post('/api/admin/users', { username, initial_balance: parseInt(balance) || 0 })
-      setResult(data)
-      setUsername(''); setBalance('')
-      onCreated()
-    } catch (err) {
-      setError(err.response?.data?.error || 'Erreur')
-    } finally {
-      setLoading(false)
-    }
+      setResult(data); setUsername(''); setBalance(''); onCreated()
+    } catch (err) { setError(err.response?.data?.error || 'Erreur') }
+    finally { setLoading(false) }
   }
 
   return (
-    <div className="max-w-md">
-      <div className="card">
-        <h2 className="font-bold text-white mb-6">Créer un compte joueur</h2>
-        <form onSubmit={handleCreate} className="space-y-4">
+    <div style={{ maxWidth: 440 }}>
+      <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 24 }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: '#d8d8f0', margin: '0 0 20px' }}>Créer un compte joueur</h2>
+        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
-            <label className="text-sm text-gray-400 mb-1.5 block">Pseudo Minecraft</label>
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)}
-              placeholder="TonPseudo" className="input-field" required />
+            <label style={{ fontSize: 11, color: '#44446a', display: 'block', marginBottom: 6 }}>Pseudo Minecraft</label>
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="TonPseudo" required
+              style={{ width: '100%', background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 8, padding: '10px 14px', color: '#d8d8f0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <div>
-            <label className="text-sm text-gray-400 mb-1.5 block">Solde initial (optionnel)</label>
-            <input type="number" value={balance} onChange={e => setBalance(e.target.value)}
-              placeholder="0" min={0} className="input-field" />
+            <label style={{ fontSize: 11, color: '#44446a', display: 'block', marginBottom: 6 }}>Solde initial</label>
+            <input type="number" value={balance} onChange={e => setBalance(e.target.value)} placeholder="0" min={0}
+              style={{ width: '100%', background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 8, padding: '10px 14px', color: '#d8d8f0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
           </div>
-          {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3">{error}</div>}
-          <button type="submit" disabled={loading} className="btn-gold w-full py-3">
+          {error && <div style={{ background: 'rgba(240,64,64,0.08)', border: '1px solid rgba(240,64,64,0.2)', borderRadius: 7, padding: '8px 12px', fontSize: 11, color: '#f06060' }}>{error}</div>}
+          <button type="submit" disabled={loading} style={{ background: '#f0c040', color: '#07071a', fontWeight: 800, padding: '12px', borderRadius: 8, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: 14, opacity: loading ? 0.6 : 1 }}>
             {loading ? 'Création...' : '➕ Créer le compte'}
           </button>
         </form>
 
         {result && (
-          <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
-            <p className="text-green-400 font-semibold mb-2">✅ Compte créé !</p>
-            <div className="space-y-1 text-sm">
-              <div>Pseudo : <span className="text-white font-bold">{result.username}</span></div>
-              <div className="flex items-center gap-2">
-                Mot de passe provisoire :
-                <span className="bg-casino-bg text-casino-gold font-mono font-bold px-2 py-1 rounded text-base">
+          <div style={{ marginTop: 16, padding: 14, background: 'rgba(64,240,128,0.06)', border: '1px solid rgba(64,240,128,0.2)', borderRadius: 10 }}>
+            <p style={{ color: '#40f080', fontWeight: 600, margin: '0 0 10px', fontSize: 13 }}>✅ Compte créé !</p>
+            <div style={{ fontSize: 11, color: '#9898b8', lineHeight: 1.7 }}>
+              <div>Pseudo : <strong style={{ color: '#fff' }}>{result.username}</strong></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                Mdp provisoire :
+                <span style={{ background: '#07071a', color: '#f0c040', fontFamily: 'monospace', fontWeight: 700, padding: '2px 10px', borderRadius: 6, fontSize: 14 }}>
                   {result.temp_password}
                 </span>
               </div>
-              <p className="text-gray-400 text-xs mt-2">⚠️ Envoie ce mot de passe au joueur sur Discord/MC. Il devra le changer à sa première connexion.</p>
+              <p style={{ color: '#44446a', fontSize: 10, marginTop: 8 }}>⚠️ Envoie ce mot de passe sur Discord. Il devra le changer à la 1ère connexion.</p>
             </div>
           </div>
         )}
@@ -288,192 +573,194 @@ function CreateUserTab({ onCreated }) {
   )
 }
 
+// ── Withdrawals ───────────────────────────────────────────────────────────────
 function WithdrawalsTab({ withdrawals, onRefresh }) {
   const [loading, setLoading] = useState(null)
-  const [notes, setNotes] = useState({})
+  const [notes,   setNotes]   = useState({})
 
   async function handle(id, action) {
     setLoading(id)
-    try {
-      await axios.put(`/api/admin/withdrawals/${id}`, { action, admin_note: notes[id] || '' })
-      onRefresh()
-    } catch {}
-    setLoading(null)
+    try { await axios.put(`/api/admin/withdrawals/${id}`, { action, admin_note: notes[id] || '' }); onRefresh() }
+    catch {} finally { setLoading(null) }
   }
 
   const pending = withdrawals.filter(w => w.status === 'pending')
-  const done = withdrawals.filter(w => w.status !== 'pending')
+  const done    = withdrawals.filter(w => w.status !== 'pending')
 
   return (
-    <div className="space-y-6">
-      {pending.length > 0 && (
-        <div>
-          <h2 className="font-bold text-yellow-400 mb-3">⏳ En attente ({pending.length})</h2>
-          <div className="space-y-3">
-            {pending.map(w => (
-              <div key={w.id} className="card border-yellow-500/30 bg-yellow-500/5">
-                <div className="flex flex-wrap gap-4 items-start justify-between">
-                  <div>
-                    <div className="font-bold text-white text-lg">{w.username}</div>
-                    <div className="text-casino-gold font-black text-2xl">{w.amount.toLocaleString()} jetons</div>
-                    <div className="text-gray-500 text-xs">{new Date(w.created_at).toLocaleString('fr')}</div>
-                  </div>
-                  <div className="flex flex-col gap-2 min-w-48">
-                    <input type="text" placeholder="Note admin (optionnel)"
-                      value={notes[w.id] || ''}
-                      onChange={e => setNotes(prev => ({ ...prev, [w.id]: e.target.value }))}
-                      className="input-field text-sm py-2" />
-                    <div className="flex gap-2">
-                      <button onClick={() => handle(w.id, 'approve')} disabled={loading === w.id}
-                        className="flex-1 bg-green-600 hover:bg-green-500 text-white text-sm font-bold py-2 rounded transition-colors">
-                        ✅ Approuver
-                      </button>
-                      <button onClick={() => handle(w.id, 'reject')} disabled={loading === w.id}
-                        className="flex-1 bg-red-700 hover:bg-red-600 text-white text-sm font-bold py-2 rounded transition-colors">
-                        ❌ Refuser
-                      </button>
-                    </div>
-                  </div>
-                </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {pending.length === 0
+        ? <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: '28px', textAlign: 'center', color: '#2e2e50', fontSize: 12 }}>✅ Aucun retrait en attente</div>
+        : pending.map(w => (
+          <div key={w.id} style={{ background: '#0c0a00', border: '1px solid rgba(240,192,64,0.3)', borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#d8d8f0' }}>{w.username}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#f0c040' }}>{parseInt(w.amount).toLocaleString()} jetons</div>
+              <div style={{ fontSize: 10, color: '#44446a' }}>{new Date(w.created_at).toLocaleString('fr')}</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 220 }}>
+              <input type="text" placeholder="Note admin (optionnel)" value={notes[w.id] || ''}
+                onChange={e => setNotes(p => ({ ...p, [w.id]: e.target.value }))}
+                style={{ background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 7, padding: '7px 12px', color: '#c8c8e8', fontSize: 11, outline: 'none' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => handle(w.id, 'approve')} disabled={loading === w.id}
+                  style={{ flex: 1, background: '#16a34a', color: '#fff', fontWeight: 700, padding: '9px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12 }}>
+                  ✅ Approuver
+                </button>
+                <button onClick={() => handle(w.id, 'reject')} disabled={loading === w.id}
+                  style={{ flex: 1, background: '#dc2626', color: '#fff', fontWeight: 700, padding: '9px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12 }}>
+                  ❌ Refuser
+                </button>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      )}
-
-      {pending.length === 0 && (
-        <div className="card text-center py-8 text-gray-500">✅ Aucun retrait en attente</div>
-      )}
+        ))
+      }
 
       {done.length > 0 && (
-        <div>
-          <h2 className="font-bold text-gray-400 mb-3">Historique</h2>
-          <div className="card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-gray-500 border-b border-casino-border">
-                  <th className="text-left py-2">Joueur</th>
-                  <th className="text-right py-2">Montant</th>
-                  <th className="text-center py-2">Statut</th>
-                  <th className="text-left py-2">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {done.map(w => (
-                  <tr key={w.id} className="border-b border-casino-border/50">
-                    <td className="py-2 text-white">{w.username}</td>
-                    <td className="py-2 text-right text-casino-gold font-bold">{w.amount.toLocaleString()}</td>
-                    <td className="py-2 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${w.status === 'approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                        {w.status === 'approved' ? '✅ Approuvé' : '❌ Refusé'}
-                      </span>
-                    </td>
-                    <td className="py-2 text-gray-500 text-xs">{new Date(w.resolved_at || w.created_at).toLocaleDateString('fr')}</td>
-                  </tr>
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#5a5a8a', margin: '0 0 12px' }}>Historique</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #1e1e40' }}>
+                {['Joueur', 'Montant', 'Statut', 'Date'].map(h => (
+                  <th key={h} style={{ padding: '6px 8px', textAlign: h === 'Joueur' ? 'left' : 'right', color: '#44446a', fontWeight: 600 }}>{h}</th>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
+            <tbody>
+              {done.map(w => (
+                <tr key={w.id} style={{ borderBottom: '1px solid #0f0f28' }}>
+                  <td style={{ padding: '7px 8px', color: '#c8c8e8' }}>{w.username}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', color: '#f0c040', fontWeight: 700 }}>{parseInt(w.amount).toLocaleString()}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right' }}>
+                    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 8, background: w.status === 'approved' ? 'rgba(64,240,128,0.1)' : 'rgba(240,64,64,0.1)', color: w.status === 'approved' ? '#40f080' : '#f06060' }}>
+                      {w.status === 'approved' ? '✅ Approuvé' : '❌ Refusé'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', color: '#44446a', fontSize: 10 }}>{new Date(w.resolved_at || w.created_at).toLocaleDateString('fr')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   )
 }
 
-function LiveTab({ liveFeed, stats, gameSettings, toggleGame }) {
-  const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎡' }
+// ── Live ──────────────────────────────────────────────────────────────────────
+function LiveTab({ liveFeed }) {
+  const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎯', crash: '📈', blackjack: '🃏', mines: '💣' }
+  return (
+    <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#40f080', animation: 'pulse-dot 1.4s ease-in-out infinite' }} />
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: 0 }}>Activité en direct</h2>
+      </div>
+      {liveFeed.length === 0 ? (
+        <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0', fontSize: 12 }}>En attente d'activité...</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {liveFeed.map((e, i) => (
+            <div key={i} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '8px 12px', background: '#07071a', borderRadius: 8,
+              border: '1px solid #12122a', fontSize: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>{GAME_ICONS[e.game] || '🎲'}</span>
+                <div>
+                  <span style={{ color: '#c8c8e8', fontWeight: 600 }}>{e.username}</span>
+                  <span style={{ color: '#44446a', marginLeft: 6 }}>{e.game}</span>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontWeight: 700, color: e.payout > e.bet ? '#40f080' : '#f06060' }}>
+                  {e.payout > e.bet ? `+${(e.payout - e.bet).toLocaleString()}` : `-${e.bet?.toLocaleString()}`}
+                </div>
+                {e.bet_id && <div style={{ fontSize: 9, color: '#2e2e50', fontFamily: 'monospace' }}>{e.bet_id}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Modal profil joueur (admin) ───────────────────────────────────────────────
+function PlayerModal({ user, data, onClose }) {
+  const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎯', crash: '📈', blackjack: '🃏', mines: '💣' }
 
   return (
-    <div className="grid lg:grid-cols-2 gap-6">
-      {/* Contrôle des machines */}
-      <div className="card">
-        <h2 className="font-bold text-white mb-4">🎮 État des machines</h2>
-        <div className="space-y-3">
-          {[
-            { id: 'slots',    label: 'Slot Machine',    emoji: '🎰' },
-            { id: 'plinko',   label: 'Plinko',          emoji: '🪀' },
-            { id: 'roulette', label: 'Roulette Pokémon', emoji: '🎡' },
-          ].map(game => {
-            const on = gameSettings[game.id] !== false
-            return (
-              <div key={game.id}
-                className="flex items-center justify-between p-3 bg-casino-bg rounded-lg border border-casino-border">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{game.emoji}</span>
-                  <div>
-                    <div className="text-white font-medium text-sm">{game.label}</div>
-                    <div className={`text-xs font-semibold ${on ? 'text-green-400' : 'text-red-400'}`}>
-                      {on ? '✅ Activée' : '🔧 Désactivée'}
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => toggleGame(game.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors border
-                    ${on
-                      ? 'bg-red-600/20 text-red-400 border-red-600/40 hover:bg-red-600/30'
-                      : 'bg-green-600/20 text-green-400 border-green-600/40 hover:bg-green-600/30'}`}
-                >
-                  {on ? 'Désactiver' : 'Réactiver'}
-                </button>
-              </div>
-            )
-          })}
-        </div>
-        <p className="text-xs text-gray-600 mt-3">
-          Désactiver une machine empêche immédiatement tout nouveau jeu. Les joueurs voient un message de maintenance.
-        </p>
-      </div>
-
-      {/* Live feed + stats */}
-      <div className="space-y-4">
-        <div className="card">
-          <h2 className="font-bold text-white mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse inline-block" />
-            Activité temps réel
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+    }} onClick={onClose}>
+      <div style={{
+        background: '#0a0a20', border: '1px solid #2a2a4a',
+        borderRadius: 16, padding: 28, width: 600, maxWidth: '90vw', maxHeight: '80vh',
+        overflow: 'auto',
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: '#f0c040', margin: 0 }}>
+            👤 {user.username}
           </h2>
-          {liveFeed.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">En attente d'activité...</p>
-          ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {liveFeed.map((e, i) => (
-                <div key={i} className="flex justify-between items-center p-2 bg-casino-bg rounded">
-                  <div className="flex items-center gap-2">
-                    <span>{GAME_ICONS[e.game]}</span>
-                    <div>
-                      <span className="text-white text-sm font-medium">{e.username}</span>
-                      <span className="text-gray-500 text-xs ml-1">— {e.game}</span>
-                    </div>
-                  </div>
-                  <div className={`font-bold text-sm ${e.payout > e.bet ? 'text-green-400' : 'text-gray-500'}`}>
-                    {e.payout > e.bet ? `+${(e.payout - e.bet).toLocaleString()}` : `-${e.bet?.toLocaleString()}`}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5a5a8a', fontSize: 20 }}>×</button>
         </div>
 
-        {stats && (
-          <div className="card">
-            <h2 className="font-bold text-white mb-4">📊 Statistiques</h2>
-            <div className="space-y-3">
+        {!data ? (
+          <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0' }}>Chargement...</div>
+        ) : (
+          <>
+            {/* Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
               {[
-                { label: 'Joueurs',              value: stats.totalPlayers,                     color: 'text-white' },
-                { label: 'Jetons en circulation', value: stats.totalBalance?.toLocaleString(),   color: 'text-casino-gold' },
-                { label: 'Parties jouées',        value: stats.gamesPlayed?.toLocaleString(),    color: 'text-white' },
-                { label: 'Avantage maison',       value: `${stats.houseEdge}%`,                 color: 'text-green-400' },
-                { label: 'Retraits en attente',
-                  value: `${stats.pendingWithdrawals?.count || 0} (${(stats.pendingWithdrawals?.total || 0).toLocaleString()} jetons)`,
-                  color: stats.pendingWithdrawals?.count > 0 ? 'text-yellow-400' : 'text-gray-400' },
+                { label: 'Parties', value: data.stats.games_played.toLocaleString() },
+                { label: 'Total misé', value: data.stats.total_bet.toLocaleString() },
+                { label: 'Net casino', value: `+${data.stats.net_loss.toLocaleString()}`, color: data.stats.net_loss > 0 ? '#40f080' : '#f06060' },
               ].map(s => (
-                <div key={s.label} className="flex justify-between py-2 border-b border-casino-border last:border-0">
-                  <span className="text-gray-400 text-sm">{s.label}</span>
-                  <span className={`font-bold text-sm ${s.color}`}>{s.value}</span>
+                <div key={s.label} style={{ background: '#07071a', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: s.color || '#d8d8f0' }}>{s.value}</div>
+                  <div style={{ fontSize: 10, color: '#44446a', marginTop: 2 }}>{s.label}</div>
                 </div>
               ))}
             </div>
-          </div>
+
+            {/* Dernières parties */}
+            <h3 style={{ fontSize: 12, fontWeight: 700, color: '#5a5a8a', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1 }}>
+              Dernières parties
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {data.history.map((h, i) => (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '7px 10px', background: '#07071a', borderRadius: 7, fontSize: 11,
+                }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span>{GAME_ICONS[h.game] || '🎲'}</span>
+                    <span style={{ color: '#9898b8' }}>{h.game}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 9, color: '#44446a' }}>{h.bet_id}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <span style={{ color: '#5a5a8a' }}>Mise {parseInt(h.bet).toLocaleString()}</span>
+                    <span style={{ fontWeight: 700, color: h.profit > 0 ? '#40f080' : h.profit < 0 ? '#f06060' : '#8888cc' }}>
+                      {h.profit > 0 ? '+' : ''}{parseInt(h.profit).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Link to={`/joueur/${user.username}`} style={{
+              display: 'block', textAlign: 'center', marginTop: 14,
+              fontSize: 11, color: '#5a5a8a', textDecoration: 'none',
+              padding: '8px', borderTop: '1px solid #1e1e40',
+            }}>
+              Voir le profil public complet →
+            </Link>
+          </>
         )}
       </div>
     </div>

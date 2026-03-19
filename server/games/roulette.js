@@ -1,19 +1,20 @@
 // ── Roulette Pokémon ──────────────────────────────────────────────────────────
-// 16 segments · 4 catégories + Magicarpe · RTP 93.8% sur chaque pari
+// 16 segments · 4 catégories + Magicarpe · RTP ~91% (réduit depuis 93.8%)
 //
+// Technique casino : réduction des multiplicateurs
 // Catégorie   | Segments | Prob   | Payout | RTP
-// Commun      |  6 / 16  | 37.5%  |  ×2.5  | 93.8%
-// Rare        |  5 / 16  | 31.3%  |  ×3    | 93.8%
-// Épique      |  3 / 16  | 18.8%  |  ×5    | 93.8%
-// Légendaire  |  1 / 16  |  6.3%  |  ×15   | 93.8%
-// Magicarpe   |  1 / 16  |  6.3%  |  ×0    | 0%  (segment neutre, non pariable)
+// Commun      |  6 / 16  | 37.5%  |  ×2.4  | 90%
+// Rare        |  5 / 16  | 31.3%  |  ×2.9  | 90.6%
+// Épique      |  3 / 16  | 18.8%  |  ×4.8  | 90%
+// Légendaire  |  1 / 16  |  6.3%  |  ×14.4 | 90%
+// Magicarpe   |  1 / 16  |  6.3%  |  ×0    | 0% (segment neutre, non pariable)
 
 const CATEGORIES = [
   {
     id:      'common',
     label:   'Commun',
     count:   6,
-    payout:  2.5,
+    payout:  2.4,
     color:   '#78c850',
     emoji:   '⭐',
     desc:    'Normal · Eau · Plante · Sol · Vol',
@@ -29,7 +30,7 @@ const CATEGORIES = [
     id:      'rare',
     label:   'Rare',
     count:   5,
-    payout:  3,
+    payout:  2.9,
     color:   '#6890f0',
     emoji:   '💙',
     desc:    'Feu · Électrik · Glace · Roche · Insecte',
@@ -45,7 +46,7 @@ const CATEGORIES = [
     id:      'epic',
     label:   'Épique',
     count:   3,
-    payout:  5,
+    payout:  4.8,
     color:   '#f85888',
     emoji:   '💜',
     desc:    'Combat · Poison · Psy',
@@ -59,7 +60,7 @@ const CATEGORIES = [
     id:      'legendary',
     label:   'Légendaire',
     count:   1,
-    payout:  15,
+    payout:  14.4,
     color:   '#f0b429',
     emoji:   '✨',
     desc:    'Mew uniquement',
@@ -69,7 +70,6 @@ const CATEGORIES = [
   },
 ]
 
-// Segment Magicarpe — neutre, non pariable, payout x0
 const MAGIKARP = {
   id:     'magikarp',
   label:  'Magicarpe',
@@ -82,7 +82,6 @@ const MAGIKARP = {
 const ALL_SEGMENTS = [...CATEGORIES, MAGIKARP]
 const TOTAL = ALL_SEGMENTS.reduce((s, c) => s + c.count, 0) // 16
 
-// Construire la roue : ordre alterné pour éviter les blocs monochromes
 function buildWheel() {
   const byCat = ALL_SEGMENTS.map(c =>
     Array.from({ length: c.count }, (_, i) => ({ ...c, segIndex: i }))

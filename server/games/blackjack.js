@@ -1,12 +1,13 @@
-// ── Blackjack — RTP ~96.5% ────────────────────────────────────────────────────
-// Règles standard casino :
-// - Dealer tire jusqu'à 17
-// - Blackjack naturel paie ×2.5
-// - Victoire normale paie ×2
+// ── Blackjack — RTP ~91% ──────────────────────────────────────────────────────
+// Règles casino défavorables au joueur (techniques vraies casinos) :
+// - Dealer tire jusqu'à 17 (soft 17 inclus)
+// - Blackjack naturel paie ×2.2  (au lieu de ×2.5 — technique casino 6:5)
+// - Victoire normale paie ×1.9   (au lieu de ×2 — maison garde 5% sur les wins)
 // - Égalité = remboursement mise (×1)
 // - Défaite = ×0
+// - Double Down disponible (mise doublée, une seule carte)
+// - Split non disponible (simplifie le jeu)
 
-// Pokémon associés à chaque valeur de carte
 const CARD_POKEMONS = {
   'A':  { dex: 151, name: 'Mew'       },
   '2':  { dex: 129, name: 'Magicarpe' },
@@ -23,8 +24,16 @@ const CARD_POKEMONS = {
   'K':  { dex: 6,   name: 'Dracaufeu' },
 }
 
-const SUITS   = ['♠', '♥', '♦', '♣']
-const VALUES  = ['A','2','3','4','5','6','7','8','9','10','J','Q','K']
+const SUITS  = ['♠', '♥', '♦', '♣']
+const VALUES = ['A','2','3','4','5','6','7','8','9','10','J','Q','K']
+
+// Multiplicateurs de paiement (réglage RTP)
+const PAYOUTS = {
+  blackjack: 2.2,   // 6:5 — technique casino (vrai casino: 3:2 = 2.5)
+  win:       1.9,   // maison garde 5% sur chaque victoire normale
+  push:      1.0,   // remboursement
+  lose:      0,
+}
 
 function createDeck() {
   const deck = []
@@ -33,7 +42,7 @@ function createDeck() {
       deck.push({ value, suit, dex: CARD_POKEMONS[value].dex, name: CARD_POKEMONS[value].name })
     }
   }
-  // Mélanger (6 decks)
+  // 6 decks mélangés
   const sixDecks = [...deck, ...deck, ...deck, ...deck, ...deck, ...deck]
   for (let i = sixDecks.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -59,44 +68,55 @@ function isBlackjack(hand) {
   return hand.length === 2 && handValue(hand) === 21
 }
 
+// Soft 17 : as + 6 (dealer tire sur soft 17)
+function isSoft17(hand) {
+  if (handValue(hand) !== 17) return false
+  return hand.some(c => c.value === 'A')
+}
+
 function play(betAmount, action, gameState) {
 
   // ── Nouvelle partie ──────────────────────────────────────────────────────────
   if (action === 'deal') {
-    const deck = createDeck()
+    const deck   = createDeck()
     const player = [deck.pop(), deck.pop()]
     const dealer = [deck.pop(), { ...deck.pop(), hidden: true }]
 
     const playerBJ = isBlackjack(player)
     const dealerBJ = isBlackjack([dealer[0], { ...dealer[1], hidden: false }])
 
-    // Blackjack immédiat
     if (playerBJ || dealerBJ) {
       const dealerFull = [dealer[0], { ...dealer[1], hidden: false }]
       let status, multiplier, payout
       if (playerBJ && dealerBJ) {
-        status = 'push'; multiplier = 1; payout = betAmount
+        status = 'push'; multiplier = PAYOUTS.push; payout = betAmount
       } else if (playerBJ) {
-        status = 'blackjack'; multiplier = 2.5; payout = Math.floor(betAmount * 2.5)
+        status = 'blackjack'; multiplier = PAYOUTS.blackjack; payout = Math.floor(betAmount * PAYOUTS.blackjack)
       } else {
-        status = 'dealer_blackjack'; multiplier = 0; payout = 0
+        status = 'dealer_blackjack'; multiplier = PAYOUTS.lose; payout = 0
       }
       return {
         status, multiplier, payout,
         player, dealer: dealerFull,
         playerValue: handValue(player),
         dealerValue: handValue(dealerFull),
+        canDouble: false,
         done: true,
       }
     }
+
+    const pVal = handValue(player)
+    // Double down disponible si le joueur a 9, 10 ou 11
+    const canDouble = [9, 10, 11].includes(pVal)
 
     return {
       status:      'playing',
       player,
       dealer,
-      deck:        deck.slice(0, 20), // garder un sous-deck pour les coups suivants
-      playerValue: handValue(player),
+      deck:        deck.slice(0, 20),
+      playerValue: pVal,
       dealerValue: cardValue(dealer[0]),
+      canDouble,
       done:        false,
     }
   }
@@ -112,12 +132,13 @@ function play(betAmount, action, gameState) {
       const dealerFull = dealer.map(c => ({ ...c, hidden: false }))
       return {
         status:      'bust',
-        multiplier:  0,
+        multiplier:  PAYOUTS.lose,
         payout:      0,
         player:      newPlayer,
         dealer:      dealerFull,
         playerValue: val,
         dealerValue: handValue(dealerFull),
+        canDouble:   false,
         done:        true,
       }
     }
@@ -129,7 +150,61 @@ function play(betAmount, action, gameState) {
       deck,
       playerValue: val,
       dealerValue: cardValue(dealer[0]),
+      canDouble:   false, // plus de double après le premier hit
       done:        false,
+    }
+  }
+
+  // ── Double Down ───────────────────────────────────────────────────────────────
+  if (action === 'double') {
+    const { player, dealer, deck } = gameState
+    const newCard   = deck.pop()
+    const newPlayer = [...player, newCard]
+    const pVal      = handValue(newPlayer)
+
+    // Révéler le dealer et jouer
+    let dealerHand = dealer.map(c => ({ ...c, hidden: false }))
+    let deckCopy   = [...deck]
+
+    // Si bust immédiat après double
+    if (pVal > 21) {
+      return {
+        status:      'bust',
+        multiplier:  PAYOUTS.lose,
+        payout:      0,
+        doubled:     true,
+        player:      newPlayer,
+        dealer:      dealerHand,
+        playerValue: pVal,
+        dealerValue: handValue(dealerHand),
+        done:        true,
+      }
+    }
+
+    // Dealer joue (avec règle soft 17)
+    while (handValue(dealerHand) < 17 || isSoft17(dealerHand)) {
+      dealerHand.push(deckCopy.pop())
+    }
+
+    const dVal = handValue(dealerHand)
+    let status, multiplier, payout
+    if (dVal > 21 || pVal > dVal) {
+      // Victoire double = mise × 2 × PAYOUTS.win, mais payout inclut la mise doublée
+      status = 'win'; multiplier = PAYOUTS.win * 2; payout = Math.floor(betAmount * 2 * PAYOUTS.win)
+    } else if (pVal === dVal) {
+      status = 'push'; multiplier = 2; payout = betAmount * 2 // remboursement de la mise doublée
+    } else {
+      status = 'lose'; multiplier = 0; payout = 0
+    }
+
+    return {
+      status, multiplier, payout,
+      doubled: true,
+      player:      newPlayer,
+      dealer:      dealerHand,
+      playerValue: pVal,
+      dealerValue: dVal,
+      done:        true,
     }
   }
 
@@ -139,8 +214,8 @@ function play(betAmount, action, gameState) {
     let dealerHand = dealer.map(c => ({ ...c, hidden: false }))
     let deckCopy   = [...deck]
 
-    // Dealer tire jusqu'à 17
-    while (handValue(dealerHand) < 17) {
+    // Dealer tire jusqu'à 17+ (soft 17 inclus — règle défavorable au joueur)
+    while (handValue(dealerHand) < 17 || isSoft17(dealerHand)) {
       dealerHand.push(deckCopy.pop())
     }
 
@@ -149,11 +224,11 @@ function play(betAmount, action, gameState) {
 
     let status, multiplier, payout
     if (dVal > 21 || pVal > dVal) {
-      status = 'win'; multiplier = 2; payout = betAmount * 2
+      status = 'win'; multiplier = PAYOUTS.win; payout = Math.floor(betAmount * PAYOUTS.win)
     } else if (pVal === dVal) {
-      status = 'push'; multiplier = 1; payout = betAmount
+      status = 'push'; multiplier = PAYOUTS.push; payout = betAmount
     } else {
-      status = 'lose'; multiplier = 0; payout = 0
+      status = 'lose'; multiplier = PAYOUTS.lose; payout = 0
     }
 
     return {
@@ -164,6 +239,7 @@ function play(betAmount, action, gameState) {
       dealer:      dealerHand,
       playerValue: pVal,
       dealerValue: dVal,
+      canDouble:   false,
       done:        true,
     }
   }
@@ -171,4 +247,4 @@ function play(betAmount, action, gameState) {
   return { error: 'Action invalide' }
 }
 
-module.exports = { play, handValue, isBlackjack }
+module.exports = { play, handValue, isBlackjack, PAYOUTS }

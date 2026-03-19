@@ -2,18 +2,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const NAV_GAMES = [
-  { path: '/casino/slots',    label: 'Slots',     icon: '🎰', badge: '×256'   },
-  { path: '/casino/roulette', label: 'Roulette',  icon: '🎯'                  },
-  { path: '/casino/crash',    label: 'Crash',     icon: '📈', isNew: true     },
-  { path: '/casino/blackjack',label: 'Blackjack', icon: '🃏', isNew: true     },
-  { path: '/casino/mines',    label: 'Mines',     icon: '💣', isNew: true     },
-  { path: '/casino/plinko',   label: 'Plinko',    icon: '🪀'                  },
-]
-
-const NAV_ACCOUNT = [
-  { path: '/profil',    label: 'Profil',      icon: '👤' },
-  { path: '/profil',    label: 'Historique',  icon: '📋' },
-  { path: '/retrait',   label: 'Retrait',     icon: '💸' },
+  { path: '/casino/slots',     label: 'Slots',      icon: '🎰' },
+  { path: '/casino/roulette',  label: 'Roulette',   icon: '🎯' },
+  { path: '/casino/crash',     label: 'Crash',      icon: '📈' },
+  { path: '/casino/blackjack', label: 'Blackjack',  icon: '🃏' },
+  { path: '/casino/mines',     label: 'Mines',      icon: '💣' },
+  { path: '/casino/plinko',    label: 'Plinko',     icon: '🪀' },
 ]
 
 export default function Sidebar() {
@@ -78,7 +72,9 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
         <NavSection label="Lobby" />
-        <NavItem path="/casino" icon="🏠" label="Accueil" active={isActive('/casino')} />
+        <NavItem path="/casino"     icon="🏠" label="Accueil"    active={isActive('/casino')} />
+        <NavItem path="/machines"   icon="🎮" label="Machines"   active={isActive('/machines')} />
+        <NavItem path="/classement" icon="🏆" label="Classement" active={isActive('/classement')} />
 
         <NavSection label="Jeux" />
         {NAV_GAMES.map(item => (
@@ -87,15 +83,12 @@ export default function Sidebar() {
             path={item.path}
             icon={item.icon}
             label={item.label}
-            badge={item.badge}
-            isNew={item.isNew}
             active={isActive(item.path)}
           />
         ))}
 
         <NavSection label="Compte" />
-        <NavItem path="/profil"  icon="👤" label="Profil"     active={isActive('/profil')} />
-        <NavItem path="/profil"  icon="📋" label="Historique" active={false} />
+        <NavItem path="/profil" icon="👤" label="Profil & Stats" active={isActive('/profil')} />
 
         {user?.is_admin && (
           <>
@@ -146,7 +139,7 @@ function NavSection({ label }) {
   )
 }
 
-function NavItem({ path, icon, label, badge, isNew, active }) {
+function NavItem({ path, icon, label, active }) {
   return (
     <Link to={path} style={{ textDecoration: 'none' }}>
       <div style={{
@@ -160,26 +153,6 @@ function NavItem({ path, icon, label, badge, isNew, active }) {
       }}>
         <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>{icon}</span>
         <span>{label}</span>
-        {badge && (
-          <span style={{
-            marginLeft: 'auto',
-            background: 'rgba(240,192,64,0.12)', color: '#f0c040',
-            fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 8,
-            border: '1px solid rgba(240,192,64,0.25)',
-          }}>
-            {badge}
-          </span>
-        )}
-        {isNew && (
-          <span style={{
-            marginLeft: 'auto',
-            background: 'rgba(64,240,128,0.12)', color: '#40f080',
-            fontSize: 9, padding: '1px 6px', borderRadius: 8,
-            border: '1px solid rgba(64,240,128,0.25)',
-          }}>
-            Nouveau
-          </span>
-        )}
       </div>
     </Link>
   )

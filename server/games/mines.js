@@ -1,19 +1,17 @@
-// ── Mines — RTP 94% ───────────────────────────────────────────────────────────
+// ── Mines — RTP ~92% ─────────────────────────────────────────────────────────
+// RTP réduit depuis 94% → 92% (house edge 8%)
 const GRID_SIZE = 25
 
-// Calcule le multiplicateur après avoir retourné N cases safe
-// avec M mines sur 25 cases — RTP 94%
 function calcMultiplier(minesCount, safeTurned) {
   if (safeTurned === 0) return 1.00
   const totalSafe = GRID_SIZE - minesCount
   if (safeTurned > totalSafe) return 1.00
 
-  // Produit des probabilités inverses × RTP
   let result = 1
   for (let i = 0; i < safeTurned; i++) {
     result *= (GRID_SIZE - i) / (GRID_SIZE - minesCount - i)
   }
-  return parseFloat((result * 0.94).toFixed(2))
+  return parseFloat((result * 0.92).toFixed(2))
 }
 
 function generateMines(count) {

@@ -1,15 +1,14 @@
-// ── Crash — RTP 94% ───────────────────────────────────────────────────────────
-// Formule : crash = floor(94 / (1 - random)) / 100
-// - Avantage maison : 6%
-// - Crash à 1.00x : ~6% des parties
-// - Multiplicateur plafonné à 200x
+// ── Crash — RTP ~92% ─────────────────────────────────────────────────────────
+// Formule : crash = floor(92 / (1 - random)) / 100
+// - Avantage maison : 8% (réduit depuis 6%)
+// - Crash à 1.00x : ~8% des parties
+// - Multiplicateur plafonné à 150x (réduit depuis 200x)
 
 function generateCrashPoint() {
   const r = Math.random()
-  // Éviter la division par zéro
-  if (r >= 0.94) return 1.00
-  const crash = Math.floor(94 / (1 - r)) / 100
-  return Math.min(crash, 200)
+  if (r >= 0.92) return 1.00
+  const crash = Math.floor(92 / (1 - r)) / 100
+  return Math.min(crash, 150)
 }
 
 function play(betAmount, cashoutAt) {
