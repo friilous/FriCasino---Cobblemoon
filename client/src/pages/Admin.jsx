@@ -32,8 +32,12 @@ export default function Admin() {
   const [betsSearch,   setBetsSearch]   = useState('')
   const [betsPage,     setBetsPage]     = useState(0)
   const [betsLoading,  setBetsLoading]  = useState(false)
-  const [playerModal,  setPlayerModal]  = useState(null) // { id, username }
+  const [playerModal,  setPlayerModal]  = useState(null)
   const [playerData,   setPlayerData]   = useState(null)
+  // ── NextLeg ──
+  const [nextlegUsers,   setNextlegUsers]   = useState([])
+  const [nextlegLoading, setNextlegLoading] = useState(false)
+
   const { liveFeed, socket } = useSocket()
 
   const LIMIT = 50
@@ -43,6 +47,10 @@ export default function Admin() {
   useEffect(() => {
     if (tab === 'bets') loadBets()
   }, [tab, betsFilter, betsGame, betsPage])
+
+  useEffect(() => {
+    if (tab === 'nextleg') loadNextlegUsers()
+  }, [tab])
 
   async function loadAll() {
     loadUsers(); loadWithdrawals(); loadStats(); loadGameSettings()
@@ -89,6 +97,15 @@ export default function Admin() {
     setBetsLoading(false)
   }
 
+  async function loadNextlegUsers() {
+    setNextlegLoading(true)
+    try {
+      const { data } = await axios.get('/api/admin/nextleg-users')
+      setNextlegUsers(data)
+    } catch {}
+    setNextlegLoading(false)
+  }
+
   async function openPlayerModal(user) {
     setPlayerModal(user); setPlayerData(null)
     try {
@@ -100,7 +117,11 @@ export default function Admin() {
   useEffect(() => {
     if (!socket) return
     socket.on('new_withdrawal', () => { loadWithdrawals() })
-    return () => socket.off('new_withdrawal')
+    socket.on('nextleg_new_user', () => { loadNextlegUsers() })
+    return () => {
+      socket.off('new_withdrawal')
+      socket.off('nextleg_new_user')
+    }
   }, [socket])
 
   const pendingCount = withdrawals.filter(w => w.status === 'pending').length
@@ -138,7 +159,7 @@ export default function Admin() {
         )}
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid #1e1e40', paddingBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid #1e1e40', paddingBottom: 10, flexWrap: 'wrap' }}>
           {[
             { id: 'stats',       label: '📊 Stats' },
             { id: 'machines',    label: '🎮 Machines' },
@@ -147,6 +168,7 @@ export default function Admin() {
             { id: 'withdrawals', label: `💸 Retraits${pendingCount > 0 ? ` (${pendingCount})` : ''}` },
             { id: 'bets',        label: '🎲 Tous les paris' },
             { id: 'live',        label: '📺 Live' },
+            { id: 'nextleg',     label: `🟢 Mod NextLeg${nextlegUsers.length > 0 ? ` (${nextlegUsers.length})` : ''}` },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
@@ -165,6 +187,7 @@ export default function Admin() {
         {tab === 'create'      && <CreateUserTab onCreated={loadUsers} />}
         {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onRefresh={loadWithdrawals} />}
         {tab === 'live'        && <LiveTab liveFeed={liveFeed} />}
+        {tab === 'nextleg'     && <NextlegTab users={nextlegUsers} loading={nextlegLoading} onRefresh={loadNextlegUsers} />}
         {tab === 'bets' && (
           <BetsTab
             bets={bets} betsTotal={betsTotal} betsLoading={betsLoading}
@@ -194,7 +217,6 @@ function StatsTab({ stats }) {
   if (!stats) return <div style={{ textAlign: 'center', color: '#2e2e50', padding: 40 }}>Chargement...</div>
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-      {/* Stats par jeu */}
       <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
         <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: '0 0 14px' }}>📊 Stats par jeu</h2>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -224,7 +246,6 @@ function StatsTab({ stats }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Top gains */}
         <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
           <h2 style={{ fontSize: 13, fontWeight: 700, color: '#f0c040', margin: '0 0 12px' }}>🔥 Plus gros gains</h2>
           {(stats.topWinners || []).map((w, i) => (
@@ -238,7 +259,6 @@ function StatsTab({ stats }) {
           ))}
         </div>
 
-        {/* Top pertes */}
         <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
           <h2 style={{ fontSize: 13, fontWeight: 700, color: '#f06060', margin: '0 0 12px' }}>💀 Plus grosses pertes</h2>
           {(stats.topLosers || []).map((w, i) => (
@@ -304,7 +324,6 @@ function BetsTab({ bets, betsTotal, betsLoading, filter, setFilter, game, setGam
 
   return (
     <div>
-      {/* Filtres */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 4 }}>
           {BET_FILTERS.map(f => (
@@ -655,7 +674,7 @@ function LiveTab({ liveFeed }) {
   return (
     <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#40f080', animation: 'pulse-dot 1.4s ease-in-out infinite' }} />
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#40f080' }} />
         <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: 0 }}>Activité en direct</h2>
       </div>
       {liveFeed.length === 0 ? (
@@ -689,7 +708,162 @@ function LiveTab({ liveFeed }) {
   )
 }
 
-// ── Modal profil joueur (admin) ───────────────────────────────────────────────
+// ── NextLeg Mod ───────────────────────────────────────────────────────────────
+function NextlegTab({ users, loading, onRefresh }) {
+  const [noteModal,  setNoteModal]  = useState(null)
+  const [noteText,   setNoteText]   = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+
+  function timeSince(dateStr) {
+    if (!dateStr) return '—'
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const m = Math.floor(diff / 60000)
+    if (m < 1)  return 'À l\'instant'
+    if (m < 60) return `${m}min`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h`
+    return `${Math.floor(h / 24)}j`
+  }
+
+  async function deleteUser(uid) {
+    if (!confirm('Supprimer cet utilisateur du suivi ?')) return
+    try { await axios.delete(`/api/admin/nextleg-users/${uid}`); onRefresh() } catch {}
+  }
+
+  async function saveNote() {
+    if (!noteModal) return
+    setSavingNote(true)
+    try {
+      await axios.put(`/api/admin/nextleg-users/${noteModal.uid}/note`, { note: noteText })
+      onRefresh()
+      setNoteModal(null)
+    } catch {}
+    setSavingNote(false)
+  }
+
+  const badge = (color) => ({
+    background: color + '22', color,
+    padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+  })
+
+  const btn = (color = '#f0c040') => ({
+    background: color + '18', border: `1px solid ${color}44`, color,
+    padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+  })
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 15, fontWeight: 800, color: '#d8d8f0', margin: 0 }}>🟢 Utilisateurs du mod NextLeg</h2>
+          <p style={{ fontSize: 11, color: '#44446a', margin: '4px 0 0' }}>
+            Joueurs avec "Envoi données : ON" · {users.length} enregistré{users.length > 1 ? 's' : ''}
+          </p>
+        </div>
+        <button onClick={onRefresh} style={btn()}>🔄 Actualiser</button>
+      </div>
+
+      {loading && <div style={{ textAlign: 'center', color: '#44446a', padding: 40 }}>Chargement...</div>}
+
+      {!loading && users.length === 0 && (
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 48, textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>🎮</div>
+          <div style={{ color: '#44446a', fontSize: 13 }}>Aucun utilisateur du mod pour l'instant.</div>
+          <div style={{ color: '#2e2e50', fontSize: 11, marginTop: 6 }}>
+            Les joueurs apparaissent ici dès qu'ils activent "Envoi données : ON" dans le mod.
+          </div>
+        </div>
+      )}
+
+      {!loading && users.length > 0 && (
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18, overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                {['Pseudo MC', 'Alias', 'Version', '1ère connexion', 'Dernière vue', 'Pings', 'Note', 'UID', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#44446a', textTransform: 'uppercase', letterSpacing: 1, borderBottom: '1px solid #1e1e40' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.uid}
+                  onMouseEnter={e => e.currentTarget.style.background = '#0d0d25'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  style={{ transition: 'background 0.15s' }}
+                >
+                  <td style={{ padding: '10px 12px', fontSize: 12, color: '#c8c8e8', borderBottom: '1px solid #0e0e28' }}>
+                    <span style={{ fontWeight: 700, color: '#e8e8ff' }}>{u.player}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={{ color: u.alias ? '#9898c8' : '#2e2e50', fontStyle: u.alias ? 'normal' : 'italic' }}>
+                      {u.alias || '—'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={badge('#40f0a0')}>v{u.version}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 11, color: '#5a5a8a', borderBottom: '1px solid #0e0e28' }}>
+                    {u.first_seen?.substring(0, 16)}
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={{ color: '#f0c040', fontWeight: 600 }}>{timeSince(u.last_seen)}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={badge('#7878f0')}>{u.ping_count}×</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 11, borderBottom: '1px solid #0e0e28', maxWidth: 140 }}>
+                    <span style={{ color: u.note ? '#e8c060' : '#2e2e50', fontStyle: u.note ? 'normal' : 'italic', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.note || 'Aucune note'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#3a3a60' }} title={u.uid}>
+                      {u.uid.substring(0, 8)}…
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => { setNoteModal({ uid: u.uid, player: u.player }); setNoteText(u.note || '') }} style={btn('#a0a0f0')} title="Note">✏️</button>
+                      <button onClick={() => deleteUser(u.uid)} style={btn('#f04040')} title="Supprimer">🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal note */}
+      {noteModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#0d0d22', border: '1px solid #2a2a50', borderRadius: 14, padding: 28, width: 380 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: '#d8d8f0', margin: '0 0 6px' }}>
+              ✏️ Note pour <span style={{ color: '#f0c040' }}>{noteModal.player}</span>
+            </h3>
+            <p style={{ fontSize: 11, color: '#44446a', margin: '0 0 14px' }}>Usage interne — non visible par le joueur.</p>
+            <textarea
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              placeholder="Ex : autorisé à partager le mod, VIP, suspect..."
+              rows={4}
+              style={{ width: '100%', background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 8, color: '#d8d8f0', padding: '10px 12px', fontSize: 12, resize: 'vertical', boxSizing: 'border-box', outline: 'none' }}
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 14, justifyContent: 'flex-end' }}>
+              <button onClick={() => setNoteModal(null)} style={btn('#5a5a8a')}>Annuler</button>
+              <button onClick={saveNote} disabled={savingNote} style={btn('#f0c040')}>
+                {savingNote ? 'Sauvegarde...' : '✔ Sauvegarder'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Modal profil joueur ───────────────────────────────────────────────────────
 function PlayerModal({ user, data, onClose }) {
   const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎯', crash: '📈', blackjack: '🃏', mines: '💣' }
 
@@ -704,9 +878,7 @@ function PlayerModal({ user, data, onClose }) {
         overflow: 'auto',
       }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 800, color: '#f0c040', margin: 0 }}>
-            👤 {user.username}
-          </h2>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: '#f0c040', margin: 0 }}>👤 {user.username}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5a5a8a', fontSize: 20 }}>×</button>
         </div>
 
@@ -714,7 +886,6 @@ function PlayerModal({ user, data, onClose }) {
           <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0' }}>Chargement...</div>
         ) : (
           <>
-            {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
               {[
                 { label: 'Parties', value: data.stats.games_played.toLocaleString() },
@@ -728,16 +899,12 @@ function PlayerModal({ user, data, onClose }) {
               ))}
             </div>
 
-            {/* Dernières parties */}
             <h3 style={{ fontSize: 12, fontWeight: 700, color: '#5a5a8a', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1 }}>
               Dernières parties
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {data.history.map((h, i) => (
-                <div key={i} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '7px 10px', background: '#07071a', borderRadius: 7, fontSize: 11,
-                }}>
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: '#07071a', borderRadius: 7, fontSize: 11 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span>{GAME_ICONS[h.game] || '🎲'}</span>
                     <span style={{ color: '#9898b8' }}>{h.game}</span>
@@ -753,11 +920,7 @@ function PlayerModal({ user, data, onClose }) {
               ))}
             </div>
 
-            <Link to={`/joueur/${user.username}`} style={{
-              display: 'block', textAlign: 'center', marginTop: 14,
-              fontSize: 11, color: '#5a5a8a', textDecoration: 'none',
-              padding: '8px', borderTop: '1px solid #1e1e40',
-            }}>
+            <Link to={`/joueur/${user.username}`} style={{ display: 'block', textAlign: 'center', marginTop: 14, fontSize: 11, color: '#5a5a8a', textDecoration: 'none', padding: '8px', borderTop: '1px solid #1e1e40' }}>
               Voir le profil public complet →
             </Link>
           </>

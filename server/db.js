@@ -61,6 +61,19 @@ async function initDB() {
     created_at TEXT    NOT NULL DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS')
   )`)
 
+  // ── Table utilisateurs du mod NextLeg ──────────────────────────────────────
+  await query(`CREATE TABLE IF NOT EXISTS nextleg_users (
+    id          SERIAL PRIMARY KEY,
+    uid         TEXT    NOT NULL UNIQUE,
+    player      TEXT    NOT NULL,
+    alias       TEXT    NOT NULL DEFAULT '',
+    version     TEXT    NOT NULL DEFAULT '',
+    first_seen  TEXT    NOT NULL DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS'),
+    last_seen   TEXT    NOT NULL DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS'),
+    ping_count  INTEGER NOT NULL DEFAULT 1,
+    note        TEXT    NOT NULL DEFAULT ''
+  )`)
+
   // Seed admin
   const check = await query(`SELECT id FROM users WHERE username = $1`, ['frilous'])
   if (check.rows.length === 0) {

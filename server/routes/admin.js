@@ -50,7 +50,6 @@ router.get('/game-settings', async (req, res) => {
 })
 
 // ── PUT /api/admin/game-settings/:game ────────────────────────────────────────
-// Désactivation gracieuse : les sessions en cours continuent (géré dans games.js)
 router.put('/game-settings/:game', adminMiddleware, async (req, res) => {
   try {
     const game    = req.params.game
@@ -101,7 +100,7 @@ router.get('/users', adminMiddleware, async (req, res) => {
       games_played:  parseInt(u.games_played),
       total_bet:     parseInt(u.total_bet),
       total_payout:  parseInt(u.total_payout),
-      net_loss:      parseInt(u.total_bet) - parseInt(u.total_payout), // ce que la maison a gagné sur ce joueur
+      net_loss:      parseInt(u.total_bet) - parseInt(u.total_payout),
     })))
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' })
@@ -267,8 +266,7 @@ router.put('/withdrawals/:id', adminMiddleware, async (req, res) => {
   }
 })
 
-// ── GET /api/admin/bets — TOUS les paris (filtrable) ─────────────────────────
-// Filtres : game, filter (all|wins|losses|big_wins), userId, limit, offset
+// ── GET /api/admin/bets ───────────────────────────────────────────────────────
 router.get('/bets', adminMiddleware, async (req, res) => {
   try {
     const { game, filter = 'all', userId, limit = 100, offset = 0, search } = req.query
@@ -326,7 +324,7 @@ router.get('/bets', adminMiddleware, async (req, res) => {
   }
 })
 
-// ── GET /api/admin/players/:id/history — Historique d'un joueur ──────────────
+// ── GET /api/admin/players/:id/history ───────────────────────────────────────
 router.get('/players/:id/history', adminMiddleware, async (req, res) => {
   try {
     const userId = parseInt(req.params.id)
@@ -396,7 +394,6 @@ router.get('/stats', adminMiddleware, async (req, res) => {
       query(`SELECT COUNT(*) as count, SUM(amount) as total FROM withdrawals WHERE status = 'pending'`),
       query(`SELECT COUNT(*) as count FROM game_history`),
       query(`SELECT SUM(bet) as total_bet, SUM(payout) as total_payout FROM game_history`),
-      // Stats par jeu
       query(`
         SELECT game,
           COUNT(*) as plays,
@@ -407,14 +404,12 @@ router.get('/stats', adminMiddleware, async (req, res) => {
         GROUP BY game
         ORDER BY total_bet DESC
       `),
-      // Top 5 plus gros gains
       query(`
         SELECT gh.id, u.username, gh.game, gh.bet, gh.payout, gh.payout - gh.bet as profit, gh.created_at,
           CONCAT('#', UPPER(SUBSTRING(gh.game, 1, 3)), '-', LPAD(gh.id::text, 6, '0')) as bet_id
         FROM game_history gh JOIN users u ON gh.user_id = u.id
         ORDER BY gh.payout DESC LIMIT 5
       `),
-      // Top 5 plus grosses pertes
       query(`
         SELECT gh.id, u.username, gh.game, gh.bet, gh.payout, gh.bet - gh.payout as loss, gh.created_at,
           CONCAT('#', UPPER(SUBSTRING(gh.game, 1, 3)), '-', LPAD(gh.id::text, 6, '0')) as bet_id
@@ -442,6 +437,80 @@ router.get('/stats', adminMiddleware, async (req, res) => {
     })
   } catch (err) {
     console.error(err)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  NEXTLEG MOD — Routes de tracking
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── POST /api/admin/nextleg-ping ─────────────────────────────────────────────
+// Appelé par le mod Minecraft (pas de adminMiddleware — le mod n'est pas connecté)
+router.post('/nextleg-ping', async (req, res) => {
+  try {
+    const { player, alias = '', uid, version = '' } = req.body
+    if (!uid || !player) return res.status(400).json({ error: 'uid et player requis' })
+
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
+    const existing = await query(`SELECT id FROM nextleg_users WHERE uid = $1`, [uid])
+
+    if (existing.rows.length > 0) {
+      await query(`
+        UPDATE nextleg_users
+        SET player = $1, alias = $2, version = $3, last_seen = $4, ping_count = ping_count + 1
+        WHERE uid = $5
+      `, [player, alias || '', version, now, uid])
+    } else {
+      await query(`
+        INSERT INTO nextleg_users (uid, player, alias, version, first_seen, last_seen, ping_count)
+        VALUES ($1, $2, $3, $4, $5, $5, 1)
+      `, [uid, player, alias || '', version, now])
+
+      // Notif temps réel dans le panel admin
+      if (global.io) {
+        global.io.to('admin').emit('nextleg_new_user', { uid, player, alias, version, first_seen: now })
+      }
+    }
+
+    return res.status(200).json({ ok: true })
+  } catch (err) {
+    console.error('[NextLeg ping]', err)
+    return res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ── GET /api/admin/nextleg-users ─────────────────────────────────────────────
+router.get('/nextleg-users', adminMiddleware, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT id, uid, player, alias, version, first_seen, last_seen, ping_count, note
+      FROM nextleg_users
+      ORDER BY last_seen DESC
+    `)
+    res.json(result.rows)
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ── PUT /api/admin/nextleg-users/:uid/note ────────────────────────────────────
+router.put('/nextleg-users/:uid/note', adminMiddleware, async (req, res) => {
+  try {
+    const { note } = req.body
+    await query(`UPDATE nextleg_users SET note = $1 WHERE uid = $2`, [note || '', req.params.uid])
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ── DELETE /api/admin/nextleg-users/:uid ─────────────────────────────────────
+router.delete('/nextleg-users/:uid', adminMiddleware, async (req, res) => {
+  try {
+    await query(`DELETE FROM nextleg_users WHERE uid = $1`, [req.params.uid])
+    res.json({ ok: true })
+  } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
