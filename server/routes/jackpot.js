@@ -7,7 +7,9 @@
 const express = require('express')
 const router  = express.Router()
 const { getDB } = require('../db')
-const { verifyToken } = require('../middleware/auth')
+
+const { authMiddleware: verifyToken } = require('../middleware/auth')
+}
 
 const JACKPOT_CONTRIB  = 0.05   // 5% de chaque mise
 const JACKPOT_MIN      = 5000   // minimum pour déclencher

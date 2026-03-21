@@ -6,7 +6,9 @@
 const express = require('express')
 const router  = express.Router()
 const { getDB } = require('../db')
-const { verifyToken } = require('../middleware/auth')
+
+const { authMiddleware: verifyToken } = require('../middleware/auth')
+}
 
 const TICKET_PRICE   = 5000
 const WINNER_SHARE   = 0.80

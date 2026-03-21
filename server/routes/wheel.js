@@ -5,7 +5,9 @@
 const express = require('express')
 const router  = express.Router()
 const { getDB } = require('../db')
-const { verifyToken } = require('../middleware/auth')
+
+const { authMiddleware: verifyToken } = require('../middleware/auth')
+}
 
 // Segments de la roue — probabilités = weight / totalWeight
 const SEGMENTS = [
