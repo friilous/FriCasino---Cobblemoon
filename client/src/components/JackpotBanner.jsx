@@ -30,6 +30,11 @@ export default function JackpotBanner() {
   useEffect(() => {
     if (!user) return
     axios.get('/api/superjackpot/mystatus').then(r => setMyStatus(r.data)).catch(() => {})
+    // Polling mystatus toutes les 30s pour tenir à jour la progression
+    const t = setInterval(() => {
+      axios.get('/api/superjackpot/mystatus').then(r => setMyStatus(r.data)).catch(() => {})
+    }, 30000)
+    return () => clearInterval(t)
   }, [user])
 
   useEffect(() => {
@@ -58,7 +63,11 @@ export default function JackpotBanner() {
       axios.get('/api/superjackpot').then(r => { setAmount(r.data.amount); setEligible(r.data.eligible_count) }).catch(() => {})
       if (user) axios.get('/api/superjackpot/mystatus').then(r => setMyStatus(r.data)).catch(() => {})
     })
-    return () => { socket.off('connect'); socket.off('superjackpot_update'); socket.off('superjackpot_won'); socket.off('superjackpot_no_winner'); socket.off('live_feed') }
+    // Refresh mystatus à chaque mise du joueur (balance_update = émis après chaque jeu)
+    socket.on('balance_update', () => {
+      if (user) axios.get('/api/superjackpot/mystatus').then(r => setMyStatus(r.data)).catch(() => {})
+    })
+    return () => { socket.off('connect'); socket.off('superjackpot_update'); socket.off('superjackpot_won'); socket.off('superjackpot_no_winner'); socket.off('live_feed'); socket.off('balance_update') }
   }, [socket, user])
 
   if (amount === null) return null
