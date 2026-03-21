@@ -237,10 +237,9 @@ export default function SuperJackpot() {
             )}
 
             {/* Stats en ligne */}
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:10 }}>
               <StatCard icon="👥" label="En lice ce soir" value={eligibleCount} color={eligibleCount > 0 ? C.green : C.muted} glow={eligibleCount > 0} />
               <StatCard icon="🎯" label="Pour participer" value={`${threshold.toLocaleString('fr-FR')} jetons`} color={C.gold} />
-              <StatCard icon="🛡️" label="Minimum garanti" value="5 000 jetons" color={C.purple} />
             </div>
 
             {/* Historique gagnants */}
@@ -308,7 +307,7 @@ export default function SuperJackpot() {
 
               {[
                 { icon:'🎰', color:C.gold,   step:'1', title:'Joue normalement',         desc:'5% de chaque mise part automatiquement dans la cagnotte. Pas besoin de faire quoi que ce soit !' },
-                { icon:'🎯', color:C.blue,   step:'2', title:'Atteins 5 000 jetons',      desc:'Si tu mises au moins 5 000 jetons dans la journée, tu es automatiquement inscrit au tirage du soir.' },
+                { icon:'🎯', color:C.blue,   step:'2', title:'Atteins 10 000 jetons',      desc:'Si tu mises au moins 10 000 jetons dans la journée, tu es automatiquement inscrit au tirage du soir.' },
                 { icon:'🎲', color:C.purple, step:'3', title:'Tirage à 20h00',            desc:'Chaque soir à 20h, un gagnant est tiré au sort parmi tous les joueurs éligibles du jour.' },
                 { icon:'💰', color:C.green,  step:'4', title:'Le gagnant emporte tout !', desc:'Le jackpot atterrit directement sur ton compte. Le reste repart en cagnotte pour le lendemain.' },
               ].map(({ icon, color, step, title, desc }) => (
@@ -341,23 +340,6 @@ export default function SuperJackpot() {
               <div style={{ fontSize:11, color:C.muted, marginTop:8 }}>Tous les jours à 20h00 heure française</div>
             </div>
 
-            {/* Pokémon légendaires déco */}
-            <div style={{
-              background:C.surf, border:`1px solid ${C.border}`,
-              borderRadius:16, padding:16,
-            }}>
-              <div style={{ fontSize:11, color:C.muted, textTransform:'uppercase', letterSpacing:1, marginBottom:12 }}>Légendaires du soir</div>
-              <div style={{ display:'flex', justifyContent:'space-around', alignItems:'center' }}>
-                {[144, 145, 146, 249, 250].map(dex => (
-                  <div key={dex} style={{ textAlign:'center', animation:`floatPokemon ${2 + dex % 3}s ease-in-out infinite alternate` }}>
-                    <img
-                      src={SPRITE(dex)} alt=""
-                      style={{ width:40, height:40, imageRendering:'pixelated', filter:`drop-shadow(0 0 6px ${C.gold}60)`, display:'block' }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       </div>

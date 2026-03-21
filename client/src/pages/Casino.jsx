@@ -258,7 +258,7 @@ export default function Casino() {
                       color: e.payout > e.bet ? '#40f080' : '#f06060',
                     }}>
                       {e.payout > e.bet
-                        ? `+${(e.payout - e.bet).toLocaleString()}`
+                        ? `+${e.payout.toLocaleString()}`
                         : `-${e.bet?.toLocaleString()}`}
                     </div>
                     {e.bet_id && (

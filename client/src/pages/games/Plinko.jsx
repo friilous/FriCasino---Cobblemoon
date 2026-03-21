@@ -101,7 +101,7 @@ export default function Plinko(){
     if(dropping||!user||bet<10||bet>user.balance)return;setDropping(true);setErr('')
     try{
       const{data}=await axios.post('/api/games/plinko',{bet,risk});updateBalance(data.balance)
-      const id=++uid,col=BALL_COLORS[id%BALL_COLORS.length],pnl=data.payout-bet,win=data.payout>=bet
+      const id=++uid,col=BALL_COLORS[id%BALL_COLORS.length],pnl=data.payout,win=data.payout>=bet
       pend.current[id]={payout:data.payout,mult:data.multiplier,pnl,win,color:col};drop(id,data.bucket,col)
     }catch(e){setErr(e.response?.data?.error||'Erreur réseau');setDropping(false)}
   }
@@ -139,7 +139,7 @@ export default function Plinko(){
           {last&&(
             <div style={{background:last.win?`${C.green}0e`:`${C.red}08`,border:`1px solid ${last.win?C.green+'28':C.red+'18'}`,borderRadius:12,padding:14,textAlign:'center'}}>
               <div style={{fontSize:11,color:C.muted,marginBottom:4}}>×{last.mult}</div>
-              <div style={{fontSize:22,fontWeight:900,color:last.win?C.green:C.muted}}>{last.pnl>=0?'+':''}{last.pnl.toLocaleString()}</div>
+              <div style={{fontSize:22,fontWeight:900,color:last.win?C.green:C.red}}>{last.win?`+${last.pnl.toLocaleString()}`:`−${bet.toLocaleString()}`}</div>
               <div style={{fontSize:11,color:C.muted}}>jetons</div>
             </div>
           )}

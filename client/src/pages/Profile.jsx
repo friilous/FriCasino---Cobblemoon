@@ -257,7 +257,7 @@ export default function Profile() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid #1e1e40' }}>
-                      {['#BetID', 'Jeu', 'Mise', 'Gain', 'Résultat', 'Date'].map(h => (
+                      {['#BetID', 'Jeu', 'Mise', 'Gain', 'Date'].map(h => (
                         <th key={h} style={{ padding: '8px 10px', textAlign: h === '#BetID' || h === 'Jeu' ? 'left' : 'right', color: '#44446a', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -274,12 +274,9 @@ export default function Profile() {
                         <td style={{ padding: '8px 10px', textAlign: 'right', color: '#9898b8' }}>
                           {parseInt(g.bet).toLocaleString()}
                         </td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#9898b8' }}>
-                          {parseInt(g.payout).toLocaleString()}
-                        </td>
                         <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700,
-                          color: g.profit > 0 ? '#40f080' : g.profit < 0 ? '#f06060' : '#8888cc' }}>
-                          {g.profit > 0 ? '+' : ''}{parseInt(g.profit).toLocaleString()}
+                          color: parseInt(g.payout) > 0 ? '#40f080' : '#f06060' }}>
+                          {parseInt(g.payout) > 0 ? `+${parseInt(g.payout).toLocaleString()}` : `−${parseInt(g.bet).toLocaleString()}`}
                         </td>
                         <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 10, color: '#44446a' }}>
                           {new Date(g.created_at).toLocaleString('fr')}

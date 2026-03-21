@@ -118,14 +118,14 @@ export default function Mines(){
             <div style={{background:phase==='exploded'?`${C.red}08`:`${C.green}0e`,border:`1px solid ${statusCol}25`,borderRadius:12,padding:14}}>
               <div style={{fontSize:13,fontWeight:800,color:statusCol,marginBottom:4}}>{phase==='exploded'?'💥 Voltorbe !':phase==='won'?'🏆 Grille complète !':'✅ Encaissé !'}</div>
               <div style={{fontSize:11,color:C.muted,marginBottom:6}}>{revealed.length} cases · {mines} mines</div>
-              <div style={{fontSize:22,fontWeight:900,color:statusCol}}>{phase==='exploded'?`−${bet.toLocaleString()}`:`+${(payout-bet).toLocaleString()}`}</div>
+              <div style={{fontSize:22,fontWeight:900,color:statusCol}}>{phase==='exploded'?`−${bet.toLocaleString()}`:`+${payout.toLocaleString()}`}</div>
               <div style={{fontSize:11,color:C.muted}}>jetons</div>
             </div>
           )}
 
           {history.length>0&&(
             <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-              {history.map((h,i)=><div key={i} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,background:h.status==='exploded'?`${C.red}10`:`${C.green}12`,border:`1px solid ${h.status==='exploded'?C.red+'20':C.green+'28'}`,color:h.status==='exploded'?C.red:C.green}}>{h.status==='exploded'?'💥':`+${(h.payout-h.bet).toLocaleString()}`}</div>)}
+              {history.map((h,i)=><div key={i} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,background:h.status==='exploded'?`${C.red}10`:`${C.green}12`,border:`1px solid ${h.status==='exploded'?C.red+'20':C.green+'28'}`,color:h.status==='exploded'?C.red:C.green}}>{h.status==='exploded'?'💥':`+${h.payout.toLocaleString()}`}</div>)}
             </div>
           )}
         </div>
@@ -148,7 +148,7 @@ export default function Mines(){
           {phase==='idle'&&<div style={{fontSize:12,color:C.muted}}>Configure ta mise et lance !</div>}
           {history.length>0&&(
             <div style={{display:'flex',gap:5,flexWrap:'wrap',justifyContent:'center'}}>
-              {history.map((h,i)=><div key={i} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,background:h.status==='exploded'?`${C.red}10`:`${C.green}12`,border:`1px solid ${h.status==='exploded'?C.red+'20':C.green+'28'}`,color:h.status==='exploded'?C.red:C.green}}>{h.status==='exploded'?'💥':`+${(h.payout-h.bet).toLocaleString()}`}</div>)}
+              {history.map((h,i)=><div key={i} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,background:h.status==='exploded'?`${C.red}10`:`${C.green}12`,border:`1px solid ${h.status==='exploded'?C.red+'20':C.green+'28'}`,color:h.status==='exploded'?C.red:C.green}}>{h.status==='exploded'?'💥':`+${h.payout.toLocaleString()}`}</div>)}
             </div>
           )}
         </div>

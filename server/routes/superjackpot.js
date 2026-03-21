@@ -2,10 +2,15 @@ const express = require('express')
 const router  = express.Router()
 const { query } = require('../db')
 
-const SUPERJACKPOT_CONTRIB  = 0.05   // 5% de chaque mise
 const SUPERJACKPOT_MIN      = 5000   // seed minimum garanti
 const SUPERJACKPOT_WINNER   = 0.80   // 80% au gagnant
-const ELIGIBILITY_THRESHOLD = 5000   // jetons misés dans les 24h pour être éligible
+const ELIGIBILITY_THRESHOLD = 10000  // jetons misés dans les 24h pour être éligible
+
+// Contribution aléatoire 1% à 3%, toujours un entier (pas de virgule)
+function randomContrib(bet) {
+  const pct = 0.01 + Math.random() * 0.02
+  return Math.floor(bet * pct)
+}
 
 // ── Init tables ───────────────────────────────────────────────────────────────
 async function initTables() {
