@@ -1,17 +1,19 @@
 const express = require('express')
 const router  = express.Router()
-const { getDB } = require('../db')
+const { query } = require('../db')
 const { authMiddleware } = require('../middleware/auth')
 
 const SEGMENTS = [
-  { label:'50 jetons',    value:50,    weight:30, color:'#6890f0' },
-  { label:'100 jetons',   value:100,   weight:25, color:'#78c850' },
-  { label:'200 jetons',   value:200,   weight:18, color:'#f0b429' },
-  { label:'500 jetons',   value:500,   weight:12, color:'#f85888' },
-  { label:'1 000 jetons', value:1000,  weight:8,  color:'#a855f7' },
-  { label:'2 000 jetons', value:2000,  weight:4,  color:'#f0b429' },
-  { label:'5 000 jetons', value:5000,  weight:2,  color:'#f0c040' },
-  { label:'10 000 jetons',value:10000, weight:1,  color:'#ff4444' },
+  { label:'500',    value:500,   weight:32, color:'#6890f0', rarity:'Commun'    },
+  { label:'750',    value:750,   weight:24, color:'#78c850', rarity:'Commun'    },
+  { label:'1 000',  value:1000,  weight:16, color:'#f0b429', rarity:'Peu commun'},
+  { label:'1 500',  value:1500,  weight:10, color:'#f85888', rarity:'Peu commun'},
+  { label:'2 000',  value:2000,  weight:8,  color:'#a855f7', rarity:'Rare'      },
+  { label:'3 000',  value:3000,  weight:5,  color:'#f0b429', rarity:'Rare'      },
+  { label:'5 000',  value:5000,  weight:3,  color:'#f0c040', rarity:'Épique'    },
+  { label:'10 000', value:10000, weight:1,  color:'#ff6b35', rarity:'Légendaire'},
+  { label:'20 000', value:20000, weight:.5, color:'#ff4444', rarity:'Mythique'  },
+  { label:'50 000', value:50000, weight:.1, color:'#ff0080', rarity:'???'       },
 ]
 const TOTAL_WEIGHT = SEGMENTS.reduce((s, seg) => s + seg.weight, 0)
 
@@ -22,20 +24,22 @@ function spin() {
 }
 
 async function initTables() {
-  const db = getDB()
-  await db.run(`CREATE TABLE IF NOT EXISTS wheel_spins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL UNIQUE,
-    last_spin DATETIME NOT NULL, total_won INTEGER NOT NULL DEFAULT 0,
-    spins INTEGER NOT NULL DEFAULT 0
+  await query(`CREATE TABLE IF NOT EXISTS wheel_spins (
+    id        SERIAL PRIMARY KEY,
+    user_id   INTEGER NOT NULL UNIQUE,
+    last_spin TEXT NOT NULL,
+    total_won INTEGER NOT NULL DEFAULT 0,
+    spins     INTEGER NOT NULL DEFAULT 0
   )`)
 }
 initTables().catch(console.error)
 
+// GET /api/wheel
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const db  = getDB()
-    const row = await db.get('SELECT * FROM wheel_spins WHERE user_id = ?', [req.user.id])
-    if (!row) return res.json({ can_spin: true, next_spin: null, segments: SEGMENTS })
+    const r   = await query('SELECT * FROM wheel_spins WHERE user_id = $1', [req.user.id])
+    const row = r.rows[0]
+    if (!row) return res.json({ can_spin: true, next_spin: null, segments: SEGMENTS, total_won: 0, spins: 0 })
 
     const lastSpin = new Date(row.last_spin)
     const diff     = Date.now() - lastSpin
@@ -45,42 +49,45 @@ router.get('/', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// POST /api/wheel/spin
 router.post('/spin', authMiddleware, async (req, res) => {
   try {
-    const db  = getDB()
     const now = new Date()
-    const row = await db.get('SELECT * FROM wheel_spins WHERE user_id = ?', [req.user.id])
+    const r   = await query('SELECT * FROM wheel_spins WHERE user_id = $1', [req.user.id])
+    const row = r.rows[0]
 
     if (row) {
       const diff = now - new Date(row.last_spin)
       if (diff < 24 * 60 * 60 * 1000) {
         const nextSpin = new Date(new Date(row.last_spin).getTime() + 24 * 60 * 60 * 1000)
-        return res.status(429).json({ error: 'Déjà utilisé aujourd\'hui', next_spin: nextSpin })
+        return res.status(429).json({ error: "Déjà utilisé aujourd'hui", next_spin: nextSpin })
       }
     }
 
     const result = spin()
-    await db.run('UPDATE users SET balance = balance + ? WHERE id = ?', [result.value, req.user.id])
+    await query('UPDATE users SET balance = balance + $1 WHERE id = $2', [result.value, req.user.id])
 
     if (row) {
-      await db.run('UPDATE wheel_spins SET last_spin = ?, total_won = total_won + ?, spins = spins + 1 WHERE user_id = ?',
+      await query('UPDATE wheel_spins SET last_spin = $1, total_won = total_won + $2, spins = spins + 1 WHERE user_id = $3',
         [now.toISOString(), result.value, req.user.id])
     } else {
-      await db.run('INSERT INTO wheel_spins (user_id, last_spin, total_won, spins) VALUES (?,?,?,1)',
+      await query('INSERT INTO wheel_spins (user_id, last_spin, total_won, spins) VALUES ($1,$2,$3,1)',
         [req.user.id, now.toISOString(), result.value])
     }
 
-    const user     = await db.get('SELECT username, balance FROM users WHERE id = ?', [req.user.id])
+    const ur   = await query('SELECT username, balance FROM users WHERE id = $1', [req.user.id])
+    const user = ur.rows[0]
     const nextSpin = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
     if (global.io) {
       global.io.to(`user_${req.user.id}`).emit('balance_update', { balance: user.balance })
-      if (result.value >= 2000) global.io.emit('big_wheel_win', { username: user.username, amount: result.value })
+      if (result.value >= 5000) global.io.emit('big_wheel_win', { username: user.username, amount: result.value })
     }
     res.json({ segment: result, balance: user.balance, next_spin: nextSpin })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// GET /api/wheel/segments
 router.get('/segments', (req, res) => res.json(SEGMENTS))
 
 module.exports = router
