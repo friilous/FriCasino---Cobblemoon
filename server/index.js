@@ -13,6 +13,26 @@ const io     = new Server(server, {
 
 global.io = io
 
+
+app.post('/api/admin/reset-data', async (req, res) => {
+  const { secret } = req.body
+  if (secret !== 'frilous-reset-2025') return res.status(403).json({ error: 'Non autorisé' })
+  try {
+    const { query } = require('./db')
+    await query(`TRUNCATE game_history RESTART IDENTITY CASCADE`)
+    await query(`TRUNCATE live_feed RESTART IDENTITY CASCADE`)
+    await query(`TRUNCATE superjackpot_history RESTART IDENTITY CASCADE`)
+    await query(`TRUNCATE jackpot_history RESTART IDENTITY CASCADE`)
+    await query(`TRUNCATE lottery_history RESTART IDENTITY CASCADE`)
+    await query(`TRUNCATE lottery_tickets RESTART IDENTITY CASCADE`)
+    await query(`TRUNCATE wheel_spins RESTART IDENTITY CASCADE`)
+    await query(`UPDATE superjackpot SET amount = 5000`)
+    res.json({ ok: true, message: 'Base nettoyée !' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.use(cors())
 app.use(express.json())
 
