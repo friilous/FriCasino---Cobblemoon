@@ -1,14 +1,14 @@
 const express = require('express')
 const { query } = require('../db')
 const { authMiddleware } = require('../middleware/auth')
-const slots    = require('../games/slots')
-const plinko   = require('../games/plinko')
-const roulette = require('../games/roulette')
-const crash    = require('../games/crash')
+const slots     = require('../games/slots')
+const plinko    = require('../games/plinko')
+const roulette  = require('../games/roulette')
+const crash     = require('../games/crash')
 const blackjack = require('../games/blackjack')
-const mines    = require('../games/mines')
+const mines     = require('../games/mines')
 
-const router = express.Router()
+const router  = express.Router()
 const MIN_BET = 10
 const MAX_BET = 10000
 
@@ -23,22 +23,34 @@ function validateBet(bet, balance) {
 // ── Vérification état du jeu ──────────────────────────────────────────────────
 async function checkGameEnabled(game) {
   try {
-    const result = await query(
-      `SELECT enabled FROM game_settings WHERE game = $1`, [game]
-    )
+    const result = await query(`SELECT enabled FROM game_settings WHERE game = $1`, [game])
     if (result.rows.length === 0) return true
     return result.rows[0].enabled === 1 || result.rows[0].enabled === true
-  } catch {
-    return true
-  }
+  } catch { return true }
 }
 
 // ── Génération BetID ──────────────────────────────────────────────────────────
-// Format : #SLO-A1B2C3 (préfixe jeu + ID en base 36 depuis l'horodatage)
 function generateBetId(game, dbId) {
   const prefix = game.slice(0, 3).toUpperCase()
   const id     = dbId.toString().padStart(6, '0')
   return `#${prefix}-${id}`
+}
+
+// ── Contribution SuperJackpot (5% de chaque mise) ────────────────────────────
+async function contributeToSuperJackpot(bet) {
+  try {
+    const contrib = Math.floor(bet * 0.05)
+    if (contrib <= 0) return
+    await query(
+      `UPDATE superjackpot SET amount = amount + $1, updated_at = to_char(now(),'YYYY-MM-DD HH24:MI:SS') WHERE id = 1`,
+      [contrib]
+    )
+    const r = await query(`SELECT amount FROM superjackpot WHERE id = 1`)
+    const amount = r.rows[0]?.amount
+    if (global.io) global.io.emit('superjackpot_update', { amount })
+  } catch (err) {
+    console.error('SuperJackpot contribution error:', err.message)
+  }
 }
 
 // ── Live feed ─────────────────────────────────────────────────────────────────
@@ -57,9 +69,6 @@ async function emitLiveFeed(username, game, bet, payout, multiplier, betId) {
 }
 
 // ── Sessions multi-étapes (Blackjack, Mines) ──────────────────────────────────
-// Ces sessions persistent en mémoire pour permettre les actions successives.
-// La désactivation d'un jeu bloque les NOUVELLES parties uniquement —
-// les sessions en cours sont toujours autorisées à se terminer.
 const blackjackSessions = {}
 const minesSessions     = {}
 
@@ -72,8 +81,7 @@ router.post('/slots', authMiddleware, async (req, res) => {
     const bet        = parseInt(req.body.bet)
     const userResult = await query(`SELECT * FROM users WHERE id = $1`, [req.user.id])
     const user       = userResult.rows[0]
-
-    const err = validateBet(bet, user.balance)
+    const err        = validateBet(bet, user.balance)
     if (err) return res.status(400).json({ error: err })
 
     const result     = slots.play(bet)
@@ -85,6 +93,8 @@ router.post('/slots', authMiddleware, async (req, res) => {
       [user.id, bet, result.payout, JSON.stringify({ multiplier: result.multiplier, winType: result.winType })]
     )
     const betId = generateBetId('slots', histResult.rows[0].id)
+
+    await contributeToSuperJackpot(bet)
 
     if (result.payout >= bet * 2) await emitLiveFeed(req.user.username, 'slots', bet, result.payout, result.multiplier, betId)
     if (global.io) global.io.to(`user_${req.user.id}`).emit('balance_update', { balance: newBalance })
@@ -106,8 +116,7 @@ router.post('/plinko', authMiddleware, async (req, res) => {
     const risk       = req.body.risk || 'medium'
     const userResult = await query(`SELECT * FROM users WHERE id = $1`, [req.user.id])
     const user       = userResult.rows[0]
-
-    const err = validateBet(bet, user.balance)
+    const err        = validateBet(bet, user.balance)
     if (err) return res.status(400).json({ error: err })
 
     const result     = plinko.play(bet, risk)
@@ -119,6 +128,8 @@ router.post('/plinko', authMiddleware, async (req, res) => {
       [user.id, bet, result.payout, JSON.stringify({ multiplier: result.multiplier, bucket: result.bucket, risk })]
     )
     const betId = generateBetId('plinko', histResult.rows[0].id)
+
+    await contributeToSuperJackpot(bet)
 
     if (result.payout >= bet * 3) await emitLiveFeed(req.user.username, 'plinko', bet, result.payout, result.multiplier, betId)
     if (global.io) global.io.to(`user_${req.user.id}`).emit('balance_update', { balance: newBalance })
@@ -136,12 +147,11 @@ router.post('/roulette', authMiddleware, async (req, res) => {
     const enabled = await checkGameEnabled('roulette')
     if (!enabled) return res.status(403).json({ error: 'La Roulette est temporairement désactivée.' })
 
-    const bet            = parseInt(req.body.bet)
+    const bet                = parseInt(req.body.bet)
     const { betType, betValue } = req.body
-    const userResult     = await query(`SELECT * FROM users WHERE id = $1`, [req.user.id])
-    const user           = userResult.rows[0]
-
-    const err = validateBet(bet, user.balance)
+    const userResult         = await query(`SELECT * FROM users WHERE id = $1`, [req.user.id])
+    const user               = userResult.rows[0]
+    const err                = validateBet(bet, user.balance)
     if (err) return res.status(400).json({ error: err })
     if (!betType || !betValue) return res.status(400).json({ error: 'Pari invalide' })
 
@@ -155,6 +165,8 @@ router.post('/roulette', authMiddleware, async (req, res) => {
       [user.id, bet, result.payout, JSON.stringify({ multiplier: result.multiplier, winning: result.winning, betType, betValue })]
     )
     const betId = generateBetId('roulette', histResult.rows[0].id)
+
+    await contributeToSuperJackpot(bet)
 
     if (result.payout >= bet * 5) await emitLiveFeed(req.user.username, 'roulette', bet, result.payout, result.multiplier, betId)
     if (global.io) global.io.to(`user_${req.user.id}`).emit('balance_update', { balance: finalBalance })
@@ -172,12 +184,11 @@ router.post('/crash', authMiddleware, async (req, res) => {
     const enabled = await checkGameEnabled('crash')
     if (!enabled) return res.status(403).json({ error: 'Crash est temporairement désactivé.' })
 
-    const bet       = parseInt(req.body.bet)
-    const cashoutAt = req.body.cashoutAt ? parseFloat(req.body.cashoutAt) : null
+    const bet        = parseInt(req.body.bet)
+    const cashoutAt  = req.body.cashoutAt ? parseFloat(req.body.cashoutAt) : null
     const userResult = await query(`SELECT * FROM users WHERE id = $1`, [req.user.id])
-    const user = userResult.rows[0]
-
-    const err = validateBet(bet, user.balance)
+    const user       = userResult.rows[0]
+    const err        = validateBet(bet, user.balance)
     if (err) return res.status(400).json({ error: err })
 
     const result     = crash.play(bet, cashoutAt)
@@ -190,6 +201,8 @@ router.post('/crash', authMiddleware, async (req, res) => {
     )
     const betId = generateBetId('crash', histResult.rows[0].id)
 
+    await contributeToSuperJackpot(bet)
+
     if (result.payout >= bet * 3) await emitLiveFeed(req.user.username, 'crash', bet, result.payout, result.multiplier, betId)
     if (global.io) global.io.to(`user_${req.user.id}`).emit('balance_update', { balance: newBalance })
 
@@ -201,20 +214,15 @@ router.post('/crash', authMiddleware, async (req, res) => {
 })
 
 // ── Blackjack ─────────────────────────────────────────────────────────────────
-// Désactivation gracieuse :
-// - action=deal → vérifie si activé (bloque les nouvelles parties)
-// - action=hit|stand|double → TOUJOURS autorisé (finir la partie en cours)
 router.post('/blackjack', authMiddleware, async (req, res) => {
   try {
     const { action, bet: betRaw } = req.body
     const userId = req.user.id
 
     const userResult = await query(`SELECT * FROM users WHERE id = $1`, [userId])
-    const user = userResult.rows[0]
+    const user       = userResult.rows[0]
 
-    // ── Nouvelle partie ──────────────────────────────────────────────────────
     if (action === 'deal') {
-      // Vérifier l'activation UNIQUEMENT pour les nouvelles parties
       const enabled = await checkGameEnabled('blackjack')
       if (!enabled) return res.status(403).json({ error: 'Le Blackjack est temporairement désactivé.' })
 
@@ -223,11 +231,11 @@ router.post('/blackjack', authMiddleware, async (req, res) => {
       if (err) return res.status(400).json({ error: err })
 
       await query(`UPDATE users SET balance = $1 WHERE id = $2`, [user.balance - bet, userId])
+      await contributeToSuperJackpot(bet)
 
       const result = blackjack.play(bet, 'deal', null)
       blackjackSessions[userId] = { ...result, bet, userId }
 
-      // Si partie terminée immédiatement (blackjack naturel)
       if (result.done) {
         const newBalance = user.balance - bet + result.payout
         await query(`UPDATE users SET balance = $1 WHERE id = $2`, [newBalance, userId])
@@ -241,20 +249,18 @@ router.post('/blackjack', authMiddleware, async (req, res) => {
         delete blackjackSessions[userId]
         return res.json({ ...result, bet, balance: newBalance, bet_id: betId, deck: undefined })
       }
-
       return res.json({ ...result, bet, balance: user.balance - bet, deck: undefined })
     }
 
-    // ── Hit, Stand, Double — toujours autorisé (partie en cours) ─────────────
     if (['hit', 'stand', 'double'].includes(action)) {
       const session = blackjackSessions[userId]
-      if (!session) return res.status(400).json({ error: 'Aucune partie en cours' })
-      if (session.done) return res.status(400).json({ error: 'Partie déjà terminée' })
+      if (!session)      return res.status(400).json({ error: 'Aucune partie en cours' })
+      if (session.done)  return res.status(400).json({ error: 'Partie déjà terminée' })
 
-      // Double down : vérifier que le joueur peut payer la mise supplémentaire
       if (action === 'double') {
         if (user.balance < session.bet) return res.status(400).json({ error: 'Solde insuffisant pour doubler' })
         await query(`UPDATE users SET balance = $1 WHERE id = $2`, [user.balance - session.bet, userId])
+        await contributeToSuperJackpot(session.bet)
       }
 
       const result = blackjack.play(session.bet, action, session)
@@ -287,20 +293,15 @@ router.post('/blackjack', authMiddleware, async (req, res) => {
 })
 
 // ── Mines ─────────────────────────────────────────────────────────────────────
-// Désactivation gracieuse :
-// - action=start → vérifie si activé (bloque les nouvelles parties)
-// - action=reveal|cashout → TOUJOURS autorisé (finir la partie en cours)
 router.post('/mines', authMiddleware, async (req, res) => {
   try {
     const { action, bet: betRaw, minesCount: minesRaw, cellIndex } = req.body
     const userId = req.user.id
 
     const userResult = await query(`SELECT * FROM users WHERE id = $1`, [userId])
-    const user = userResult.rows[0]
+    const user       = userResult.rows[0]
 
-    // ── Nouvelle partie ────────────────────────────────────────────────────────
     if (action === 'start') {
-      // Vérifier l'activation UNIQUEMENT pour les nouvelles parties
       const enabled = await checkGameEnabled('mines')
       if (!enabled) return res.status(403).json({ error: 'Mines est temporairement désactivé.' })
 
@@ -310,25 +311,14 @@ router.post('/mines', authMiddleware, async (req, res) => {
       if (err) return res.status(400).json({ error: err })
 
       await query(`UPDATE users SET balance = $1 WHERE id = $2`, [user.balance - bet, userId])
+      await contributeToSuperJackpot(bet)
 
       const result = mines.play(bet, minesCount, [], 'start', null)
-      minesSessions[userId] = {
-        bet,
-        minesCount,
-        mines:    result.mines,
-        revealed: [],
-        status:   'playing',
-      }
+      minesSessions[userId] = { bet, minesCount, mines: result.mines, revealed: [], status: 'playing' }
 
-      return res.json({
-        status:     'playing',
-        multiplier: 1.00,
-        payout:     0,
-        balance:    user.balance - bet,
-      })
+      return res.json({ status: 'playing', multiplier: 1.00, payout: 0, balance: user.balance - bet })
     }
 
-    // ── Révéler une case — toujours autorisé (partie en cours) ────────────────
     if (action === 'reveal') {
       const session = minesSessions[userId]
       if (!session || session.status !== 'playing')
@@ -348,13 +338,7 @@ router.post('/mines', authMiddleware, async (req, res) => {
           [userId, session.bet, JSON.stringify({ minesCount: session.minesCount, revealed: session.revealed.length, status: 'exploded' })]
         )
         delete minesSessions[userId]
-        return res.json({
-          status:     'exploded',
-          mines:      result.mines,
-          multiplier: 0,
-          payout:     0,
-          balance:    user.balance,
-        })
+        return res.json({ status: 'exploded', mines: result.mines, multiplier: 0, payout: 0, balance: user.balance })
       }
 
       if (result.status === 'won') {
@@ -372,15 +356,9 @@ router.post('/mines', authMiddleware, async (req, res) => {
       }
 
       session.status = 'playing'
-      return res.json({
-        status:     'playing',
-        multiplier: result.multiplier,
-        payout:     result.payout,
-        balance:    user.balance,
-      })
+      return res.json({ status: 'playing', multiplier: result.multiplier, payout: result.payout, balance: user.balance })
     }
 
-    // ── Encaisser — toujours autorisé (partie en cours) ───────────────────────
     if (action === 'cashout') {
       const session = minesSessions[userId]
       if (!session || session.status !== 'playing' || session.revealed.length === 0)
@@ -420,40 +398,31 @@ router.get('/live-feed', async (req, res) => {
 // ── Infos jeux ────────────────────────────────────────────────────────────────
 router.get('/info', (req, res) => {
   res.json({
-    slots:     { name: 'Slot Machine',     rtp: 88,   minBet: MIN_BET, maxBet: MAX_BET },
-    plinko:    { name: 'Plinko',           rtp: 91,   minBet: MIN_BET, maxBet: MAX_BET },
-    roulette:  { name: 'Roulette Pokémon', rtp: 91,   minBet: MIN_BET, maxBet: MAX_BET },
-    crash:     { name: 'Crash',            rtp: 92,   minBet: MIN_BET, maxBet: MAX_BET },
-    blackjack: { name: 'Blackjack',        rtp: 91,   minBet: MIN_BET, maxBet: MAX_BET },
-    mines:     { name: 'Mines',            rtp: 92,   minBet: MIN_BET, maxBet: MAX_BET },
+    slots:     { name: 'Slot Machine',     rtp: 88, minBet: MIN_BET, maxBet: MAX_BET },
+    plinko:    { name: 'Plinko',           rtp: 91, minBet: MIN_BET, maxBet: MAX_BET },
+    roulette:  { name: 'Roulette Pokémon', rtp: 91, minBet: MIN_BET, maxBet: MAX_BET },
+    crash:     { name: 'Crash',            rtp: 92, minBet: MIN_BET, maxBet: MAX_BET },
+    blackjack: { name: 'Blackjack',        rtp: 91, minBet: MIN_BET, maxBet: MAX_BET },
+    mines:     { name: 'Mines',            rtp: 92, minBet: MIN_BET, maxBet: MAX_BET },
   })
 })
 
-// ── Historique joueur (pour le profil) ───────────────────────────────────────
+// ── Historique joueur ─────────────────────────────────────────────────────────
 router.get('/history', authMiddleware, async (req, res) => {
   try {
     const { filter = 'all', limit = 50, offset = 0 } = req.query
     let whereClause = 'WHERE gh.user_id = $1'
-    const params = [req.user.id]
+    const params    = [req.user.id]
 
-    if (filter === 'wins') {
-      whereClause += ' AND gh.payout > gh.bet'
-    } else if (filter === 'losses') {
-      whereClause += ' AND gh.payout < gh.bet'
-    } else if (filter === 'big_wins') {
-      whereClause += ' AND gh.payout >= gh.bet * 2'
-    }
+    if (filter === 'wins')     whereClause += ' AND gh.payout > gh.bet'
+    else if (filter === 'losses')   whereClause += ' AND gh.payout < gh.bet'
+    else if (filter === 'big_wins') whereClause += ' AND gh.payout >= gh.bet * 2'
 
     const result = await query(`
       SELECT
         gh.id,
         CONCAT('#', UPPER(SUBSTRING(gh.game, 1, 3)), '-', LPAD(gh.id::text, 6, '0')) as bet_id,
-        gh.game,
-        gh.bet,
-        gh.payout,
-        gh.payout - gh.bet as profit,
-        gh.meta,
-        gh.created_at
+        gh.game, gh.bet, gh.payout, gh.payout - gh.bet as profit, gh.meta, gh.created_at
       FROM game_history gh
       ${whereClause}
       ORDER BY gh.created_at DESC
@@ -464,12 +433,86 @@ router.get('/history', authMiddleware, async (req, res) => {
       `SELECT COUNT(*) as total FROM game_history ${whereClause}`, params
     )
 
-    res.json({
-      history: result.rows,
-      total:   parseInt(countResult.rows[0].total),
-    })
+    res.json({ history: result.rows, total: parseInt(countResult.rows[0].total) })
   } catch (err) {
     console.error(err)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+// ── Leaderboard ───────────────────────────────────────────────────────────────
+router.get('/leaderboard', async (req, res) => {
+  try {
+    const { game } = req.query
+    const gameFilter = game && game !== 'all' ? `AND gh.game = '${game}'` : ''
+
+    // Top bilan net (profit total)
+    const topProfit = await query(`
+      SELECT
+        u.username,
+        COUNT(gh.id)::int          AS games_played,
+        COALESCE(SUM(gh.bet),0)::int    AS total_bet,
+        COALESCE(SUM(gh.payout - gh.bet),0)::int AS total_profit
+      FROM users u
+      JOIN game_history gh ON gh.user_id = u.id
+      WHERE 1=1 ${gameFilter}
+      GROUP BY u.username
+      ORDER BY total_profit DESC
+      LIMIT 20
+    `)
+
+    // Plus gros gains (une seule mise)
+    const topWins = await query(`
+      SELECT
+        u.username,
+        gh.game,
+        gh.bet::int,
+        gh.payout::int,
+        CONCAT('#', UPPER(SUBSTRING(gh.game,1,3)), '-', LPAD(gh.id::text,6,'0')) AS bet_id
+      FROM game_history gh
+      JOIN users u ON u.id = gh.user_id
+      WHERE gh.payout > gh.bet ${gameFilter}
+      ORDER BY gh.payout DESC
+      LIMIT 20
+    `)
+
+    // Plus grosses mises
+    const topBet = await query(`
+      SELECT
+        u.username,
+        gh.game,
+        gh.bet::int,
+        gh.payout::int,
+        CONCAT('#', UPPER(SUBSTRING(gh.game,1,3)), '-', LPAD(gh.id::text,6,'0')) AS bet_id
+      FROM game_history gh
+      JOIN users u ON u.id = gh.user_id
+      WHERE 1=1 ${gameFilter}
+      ORDER BY gh.bet DESC
+      LIMIT 20
+    `)
+
+    // Plus actifs (nombre de parties)
+    const mostPlayed = await query(`
+      SELECT
+        u.username,
+        COUNT(gh.id)::int               AS games_played,
+        COALESCE(SUM(gh.bet),0)::int    AS total_bet
+      FROM users u
+      JOIN game_history gh ON gh.user_id = u.id
+      WHERE 1=1 ${gameFilter}
+      GROUP BY u.username
+      ORDER BY games_played DESC
+      LIMIT 20
+    `)
+
+    res.json({
+      topProfit:  topProfit.rows,
+      topWins:    topWins.rows,
+      topBet:     topBet.rows,
+      mostPlayed: mostPlayed.rows,
+    })
+  } catch (err) {
+    console.error('Leaderboard error:', err)
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })

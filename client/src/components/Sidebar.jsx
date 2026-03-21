@@ -12,8 +12,8 @@ const NAV_GAMES = [
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
-  const location = useLocation()
-  const navigate = useNavigate()
+  const location         = useLocation()
+  const navigate         = useNavigate()
 
   const isActive = (path) => location.pathname === path
 
@@ -26,15 +26,9 @@ export default function Sidebar() {
 
   return (
     <aside style={{
-      width: 210,
-      background: '#0a0a20',
-      borderRight: '1px solid #1e1e40',
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      position: 'sticky',
-      top: 0,
-      flexShrink: 0,
+      width: 210, background: '#0a0a20', borderRight: '1px solid #1e1e40',
+      display: 'flex', flexDirection: 'column', height: '100vh',
+      position: 'sticky', top: 0, flexShrink: 0,
     }}>
       {/* Logo */}
       <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid #1e1e40' }}>
@@ -54,15 +48,11 @@ export default function Sidebar() {
 
       {/* Solde */}
       <div style={{
-        margin: 12,
-        background: '#0f0f28',
+        margin: 12, background: '#0f0f28',
         border: '1px solid rgba(240,192,64,0.2)',
-        borderRadius: 8,
-        padding: '10px 14px',
+        borderRadius: 8, padding: '10px 14px',
       }}>
-        <div style={{ fontSize: 9, color: '#44446a', textTransform: 'uppercase', letterSpacing: 1 }}>
-          Solde
-        </div>
+        <div style={{ fontSize: 9, color: '#44446a', textTransform: 'uppercase', letterSpacing: 1 }}>Solde</div>
         <div style={{ fontSize: 20, fontWeight: 800, color: '#f0c040', marginTop: 3 }}>
           {(user?.balance || 0).toLocaleString()}
           <span style={{ fontSize: 10, color: '#666', fontWeight: 400, marginLeft: 4 }}>jetons</span>
@@ -78,18 +68,12 @@ export default function Sidebar() {
 
         <NavSection label="Jeux" />
         {NAV_GAMES.map(item => (
-          <NavItem
-            key={item.path}
-            path={item.path}
-            icon={item.icon}
-            label={item.label}
-            active={isActive(item.path)}
-          />
+          <NavItem key={item.path} path={item.path} icon={item.icon} label={item.label} active={isActive(item.path)} />
         ))}
 
         <NavSection label="Bonus" />
-        <NavItem path="/loterie"      icon="🎟️" label="Loterie"      active={isActive('/loterie')} />
-        <NavItem path="/roue-du-jour" icon="🎡" label="Roue du jour" active={isActive('/roue-du-jour')} />
+        <NavItem path="/superjackpot" icon="💎" label="SuperJackpot" active={isActive('/superjackpot')} />
+        <NavItem path="/roue-du-jour" icon="🎁" label="Caisse du jour" active={isActive('/roue-du-jour')} />
 
         <NavSection label="Compte" />
         <NavItem path="/profil" icon="👤" label="Profil & Stats" active={isActive('/profil')} />
@@ -116,14 +100,7 @@ export default function Sidebar() {
             </div>
             <span style={{ fontSize: 11, color: '#9898b8' }}>{user.username}</span>
           </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 14, color: '#44446a', padding: '4px',
-            }}
-            title="Déconnexion"
-          >
+          <button onClick={handleLogout} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#44446a', padding: '4px' }} title="Déconnexion">
             ⬡
           </button>
         </div>
@@ -152,8 +129,7 @@ function NavItem({ path, icon, label, active }) {
         color: active ? '#f0c040' : '#5a5a8a',
         background: active ? '#15152e' : 'transparent',
         borderLeft: `2px solid ${active ? '#f0c040' : 'transparent'}`,
-        transition: 'all 0.15s',
-        cursor: 'pointer',
+        transition: 'all 0.15s', cursor: 'pointer',
       }}>
         <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>{icon}</span>
         <span>{label}</span>
