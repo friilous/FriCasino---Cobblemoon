@@ -393,12 +393,13 @@ function DrawCountdown({ large }) {
   const [urgent, setUrgent] = useState(false)
   useEffect(() => {
     function upd() {
-      const now   = new Date()
-      const frNow = new Date(now.getTime() + 2 * 60 * 60 * 1000)
-      const target = new Date(frNow)
+      const now    = new Date()
+      const target = new Date()
       target.setHours(20, 0, 0, 0)
-      if (frNow >= target) target.setDate(target.getDate() + 1)
-      const diff = target - frNow
+      // Si 20h est déjà passé aujourd'hui, viser demain 20h
+      if (now >= target) target.setDate(target.getDate() + 1)
+
+      const diff = target - now
       const h = Math.floor(diff / 3600000)
       const m = Math.floor((diff % 3600000) / 60000)
       const s = Math.floor((diff % 60000) / 1000)
