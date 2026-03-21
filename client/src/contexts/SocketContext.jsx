@@ -10,9 +10,10 @@ export function SocketProvider({ children }) {
   const [socket,       setSocket]       = useState(null)  // ← state réactif au lieu de ref
   const [liveFeed,     setLiveFeed]     = useState([])
   const [connected,    setConnected]    = useState(false)
+  const [lastBet,      setLastBet]      = useState(0)  // s'incrémente à chaque mise du joueur
   const [gameSettings, setGameSettings] = useState({
     slots: true, roulette: true, crash: true,
-    blackjack: true, mines: true, plinko: true,
+    blackjack: true, mines: true, plinko: true, fishing: true,
   })
 
   useEffect(() => {
@@ -27,6 +28,9 @@ export function SocketProvider({ children }) {
     })
     sock.on('game_settings_update', ({ game, enabled }) => {
       setGameSettings(prev => ({ ...prev, [game]: enabled }))
+    })
+    sock.on('balance_update', () => {
+      setLastBet(n => n + 1)  // incrémente → déclenche useEffect dans les composants abonnés
     })
 
     return () => sock.disconnect()
@@ -50,9 +54,10 @@ export function SocketProvider({ children }) {
 
   return (
     <SocketContext.Provider value={{
-      socket,  // ← socket réactif, Admin.jsx le recevra correctement
+      socket,
       liveFeed, setLiveFeed,
       connected,
+      lastBet,
       gameSettings,
     }}>
       {children}

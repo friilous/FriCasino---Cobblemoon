@@ -17,7 +17,7 @@ const SPRITE = dex => `https://raw.githubusercontent.com/PokeAPI/sprites/master/
 
 export default function SuperJackpot() {
   const { user }   = useAuth()
-  const { socket } = useSocket()
+  const { socket, lastBet } = useSocket()
 
   const [data,     setData]     = useState(null)
   const [history,  setHistory]  = useState([])
@@ -58,6 +58,9 @@ export default function SuperJackpot() {
   }
 
   useEffect(() => { load(); loadMyStatus() }, [user])
+
+  // Refresh mystatus à chaque mise (lastBet change dans SocketContext)
+  useEffect(() => { loadMyStatus() }, [lastBet])
 
   useEffect(() => {
     if (!socket) return

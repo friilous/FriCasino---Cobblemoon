@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import axios from 'axios'
 
 export default function JackpotBanner() {
-  const { socket }   = useSocket()
+  const { socket, lastBet } = useSocket()
   const { user }     = useAuth()
   const [amount,     setAmount]     = useState(null)
   const [eligible,   setEligible]   = useState(0)
@@ -30,12 +30,11 @@ export default function JackpotBanner() {
   useEffect(() => {
     if (!user) return
     axios.get('/api/superjackpot/mystatus').then(r => setMyStatus(r.data)).catch(() => {})
-    // Polling mystatus toutes les 30s pour tenir à jour la progression
     const t = setInterval(() => {
       axios.get('/api/superjackpot/mystatus').then(r => setMyStatus(r.data)).catch(() => {})
     }, 30000)
     return () => clearInterval(t)
-  }, [user])
+  }, [user, lastBet])
 
   useEffect(() => {
     if (!socket) return
