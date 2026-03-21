@@ -5,340 +5,226 @@ import { useAuth } from '../../contexts/AuthContext'
 import BetInput from '../../components/BetInput'
 import LiveFeed from '../../components/LiveFeed'
 
-const SPRITE = dex =>
-  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`
-
-const SUIT_COLORS = { '♠': '#c8c8e8', '♣': '#c8c8e8', '♥': '#f06060', '♦': '#f06060' }
-
-const STATUS_INFO = {
-  blackjack:        { label: '🏆 BLACKJACK !',       color: '#f0c040', bg: 'rgba(240,192,64,0.08)'  },
-  win:              { label: '✅ Gagné !',             color: '#40f080', bg: 'rgba(64,240,128,0.08)' },
-  push:             { label: '🤝 Égalité',            color: '#8888cc', bg: 'rgba(136,136,204,0.08)'},
-  bust:             { label: '💥 Dépassé 21 !',       color: '#f06060', bg: 'rgba(240,96,96,0.08)'  },
-  lose:             { label: '❌ Perdu',              color: '#f06060', bg: 'rgba(240,96,96,0.08)'  },
-  dealer_blackjack: { label: '😈 Blackjack dealer',   color: '#f06060', bg: 'rgba(240,96,96,0.08)'  },
+const C = {
+  bg:'#06060f', surf1:'#0c0c1e', surf2:'#111128', felt:'#0a1f0f', feltBorder:'#0f3020',
+  border:'#1e1e3a', gold:'#f0b429', green:'#22c55e', red:'#ef4444',
+  txt:'#e2e2f0', muted:'#44446a', dim:'#1a1a2e',
 }
 
-function Card({ card, hidden = false, small = false }) {
-  const w = small ? 56 : 72
-  const h = small ? 78 : 100
+const SPRITE = dex => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`
+const SUIT_COLORS = { '♠':'#c8c8e8', '♣':'#c8c8e8', '♥':'#f06060', '♦':'#f06060' }
 
-  if (hidden) {
-    return (
-      <div style={{
-        width: w, height: h, borderRadius: 8,
-        background: 'linear-gradient(135deg, #1a1a3a 25%, #2a2a5a 50%, #1a1a3a 75%)',
-        border: '1px solid #3a3a6a',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-      }}>
-        <span style={{ fontSize: small ? 20 : 28 }}>🎴</span>
-      </div>
-    )
-  }
+const STATUS_INFO = {
+  blackjack:        { label:'🏆 BLACKJACK !',     color:'#f0c040', bg:'rgba(240,192,64,0.08)'  },
+  win:              { label:'✅ Gagné !',           color:'#22c55e', bg:'rgba(34,197,94,0.08)'  },
+  push:             { label:'🤝 Égalité',          color:'#8888cc', bg:'rgba(136,136,204,0.08)' },
+  bust:             { label:'💥 Dépassement !',    color:'#ef4444', bg:'rgba(239,68,68,0.08)'   },
+  lose:             { label:'❌ Perdu',            color:'#ef4444', bg:'rgba(239,68,68,0.08)'   },
+  dealer_blackjack: { label:'😈 Blackjack dealer', color:'#ef4444', bg:'rgba(239,68,68,0.08)'  },
+}
 
-  const color      = SUIT_COLORS[card.suit] || '#c8c8e8'
-  const fontSize   = small ? 11 : 13
-  const spriteSize = small ? 28 : 38
-
+// Carte grande et lisible
+function Card({ card, hidden=false }) {
+  const W=88, H=120
+  if (hidden) return (
+    <div style={{width:W,height:H,borderRadius:10,flexShrink:0,
+      background:'linear-gradient(135deg,#1a1a3a 25%,#2a2a5a 50%,#1a1a3a 75%)',
+      border:'1px solid #3a3a6a',display:'flex',alignItems:'center',justifyContent:'center',
+      boxShadow:'0 4px 12px rgba(0,0,0,0.5)'}}>
+      <span style={{fontSize:32}}>🎴</span>
+    </div>
+  )
+  const color=SUIT_COLORS[card.suit]||'#c8c8e8'
   return (
-    <div style={{
-      width: w, height: h, borderRadius: 8,
-      background: '#12122a', border: '1px solid #2a2a4a',
-      display: 'flex', flexDirection: 'column',
-      padding: '4px 5px', flexShrink: 0, position: 'relative',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-        <span style={{ fontSize, fontWeight: 800, color }}>{card.value}</span>
-        <span style={{ fontSize: fontSize - 2, color }}>{card.suit}</span>
+    <div style={{width:W,height:H,borderRadius:10,background:'#12122a',
+      border:'1px solid #2a2a4a',display:'flex',flexDirection:'column',
+      padding:'6px 7px',flexShrink:0,position:'relative',
+      boxShadow:'0 4px 14px rgba(0,0,0,0.5)'}}>
+      <div style={{lineHeight:1.1}}>
+        <div style={{fontSize:15,fontWeight:800,color}}>{card.value}</div>
+        <div style={{fontSize:13,color}}>{card.suit}</div>
       </div>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
         <img src={SPRITE(card.dex)} alt={card.name} title={card.name}
-          style={{ width: spriteSize, height: spriteSize, imageRendering: 'pixelated', objectFit: 'contain' }} />
+          style={{width:46,height:46,imageRendering:'pixelated',objectFit:'contain'}}/>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1, transform: 'rotate(180deg)' }}>
-        <span style={{ fontSize, fontWeight: 800, color }}>{card.value}</span>
-        <span style={{ fontSize: fontSize - 2, color }}>{card.suit}</span>
+      <div style={{lineHeight:1.1,transform:'rotate(180deg)',alignSelf:'flex-end'}}>
+        <div style={{fontSize:15,fontWeight:800,color}}>{card.value}</div>
+        <div style={{fontSize:13,color}}>{card.suit}</div>
       </div>
     </div>
   )
 }
 
-function Hand({ cards = [], value, label }) {
+function ScoreChip({ value }) {
+  if (!value) return null
+  const over = value > 21
+  const bj   = value === 21
+  return (
+    <div style={{fontSize:14,fontWeight:800,padding:'3px 12px',borderRadius:20,
+      background:C.surf1,border:`1px solid ${over?C.red:bj?C.gold:C.border}`,
+      color:over?C.red:bj?C.gold:C.txt,boxShadow:bj?`0 0 10px ${C.gold}40`:'none'}}>
+      {over?`${value} 💥`:bj?'21 ✨':value}
+    </div>
+  )
+}
+
+function Hand({ cards=[], value, label }) {
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: '#5a5a8a', textTransform: 'uppercase', letterSpacing: 1 }}>
-          {label}
-        </span>
-        {value > 0 && (
-          <span style={{
-            fontSize: 13, fontWeight: 800,
-            color: value > 21 ? '#f06060' : value === 21 ? '#f0c040' : '#d8d8f0',
-            background: '#1a1a35', padding: '2px 10px', borderRadius: 20,
-            border: '1px solid #2a2a4a',
-          }}>
-            {value > 21 ? `${value} 💥` : value === 21 ? '21 ✨' : value}
-          </span>
-        )}
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+        <span style={{fontSize:11,color:C.muted,textTransform:'uppercase',letterSpacing:1}}>{label}</span>
+        <ScoreChip value={value>0?value:null}/>
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {cards.map((card, i) => (
-          <Card key={i} card={card} hidden={card.hidden} />
-        ))}
+      <div style={{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center',minHeight:120}}>
+        {cards.map((card,i)=><Card key={i} card={card} hidden={card.hidden}/>)}
       </div>
     </div>
   )
 }
 
 export default function Blackjack() {
-  const { user, updateBalance } = useAuth()
-  const [bet,     setBet]     = useState(100)
-  const [phase,   setPhase]   = useState('idle')
-  const [game,    setGame]    = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
-  const [history, setHistory] = useState([])
+  const {user,updateBalance}=useAuth()
+  const [bet,setBet]=useState(100)
+  const [phase,setPhase]=useState('idle')
+  const [game,setGame]=useState(null)
+  const [loading,setLoading]=useState(false)
+  const [error,setError]=useState('')
+  const [history,setHistory]=useState([])
 
-  async function sendAction(action, betAmount) {
-    setLoading(true); setError('')
+  async function sendAction(action,betAmount) {
+    setLoading(true);setError('')
     try {
-      const payload = action === 'deal' ? { action, bet: betAmount } : { action }
-      const { data } = await axios.post('/api/games/blackjack', payload)
-
-      setGame(data)
-      updateBalance(data.balance)
-
-      if (data.done) {
+      const payload=action==='deal'?{action,bet:betAmount}:{action}
+      const{data}=await axios.post('/api/games/blackjack',payload)
+      setGame(data);updateBalance(data.balance)
+      if(data.done){
         setPhase('done')
-        setHistory(prev => [{
-          status:     data.status,
-          bet:        action === 'deal' ? betAmount : game?.bet,
-          payout:     data.payout,
-          multiplier: data.multiplier,
-          doubled:    data.doubled || false,
-          bet_id:     data.bet_id,
-        }, ...prev].slice(0, 10))
-      } else {
-        setPhase('playing')
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || 'Erreur réseau')
-    } finally {
-      setLoading(false)
-    }
+        setHistory(p=>[{status:data.status,bet:action==='deal'?betAmount:game?.bet,payout:data.payout,multiplier:data.multiplier,doubled:data.doubled||false},...p].slice(0,8))
+      } else setPhase('playing')
+    } catch(err){setError(err.response?.data?.error||'Erreur réseau')}
+    finally{setLoading(false)}
   }
 
-  function handleDeal() {
-    if (bet < 10 || bet > (user?.balance || 0)) return
-    sendAction('deal', bet)
-  }
-
-  const statusInfo = game?.status ? STATUS_INFO[game.status] : null
-  const canDouble  = game?.canDouble && phase === 'playing' && (user?.balance || 0) >= (game?.bet || 0)
+  const canDouble=game?.canDouble&&phase==='playing'&&(user?.balance||0)>=(game?.bet||0)
+  const statusInfo=game?.status?STATUS_INFO[game.status]:null
+  const isPlaying=phase==='playing'
+  const isDone=phase==='done'
 
   return (
-    <div style={{ padding: '24px 28px', minHeight: '100vh', background: '#07071a' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <Link to="/machines" style={{ fontSize: 11, color: '#44446a', textDecoration: 'none' }}>← Machines</Link>
-        <span style={{ color: '#2a2a4a' }}>/</span>
-        <span style={{ fontSize: 11, color: '#f0c040', fontWeight: 700 }}>🃏 Blackjack</span>
-        <span style={{
-          marginLeft: 'auto', fontSize: 9, padding: '2px 8px', borderRadius: 8,
-          background: 'rgba(240,192,64,0.1)', color: '#f0c040',
-          border: '1px solid rgba(240,192,64,0.2)',
-        }}>
-          RTP ~91%
-        </span>
+    <div style={{minHeight:'100vh',background:C.bg,padding:'14px',boxSizing:'border-box'}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
+        <Link to="/casino" style={{fontSize:11,color:C.muted,textDecoration:'none'}}>← Lobby</Link>
+        <span style={{color:C.dim}}>/</span>
+        <span style={{fontSize:13,color:C.gold,fontWeight:700}}>🃏 Blackjack</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 16 }}>
+      <div style={{display:'grid',gridTemplateColumns:'260px 1fr',gap:12,alignItems:'start'}}>
 
-        {/* Table */}
-        <div style={{
-          background: '#0a0a20', border: '1px solid #1e1e40',
-          borderRadius: 14, padding: 24, minHeight: 420,
-          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-        }}>
-          <div style={{
-            background: '#071a10', border: '1px solid #0f3020',
-            borderRadius: 10, padding: '20px 24px', flex: 1,
-            display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 24,
-          }}>
-            <Hand
-              cards={game?.dealer || []}
-              value={phase === 'done' ? game?.dealerValue : (game?.dealer?.[0] ? game.dealerValue : 0)}
-              label="🎩 Dresseur (Dealer)"
-            />
-            <div style={{ borderTop: '1px dashed #0f3020', textAlign: 'center', position: 'relative' }}>
-              <span style={{
-                position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
-                background: '#071a10', padding: '0 12px', fontSize: 18,
-              }}>🎯</span>
-            </div>
-            <Hand
-              cards={game?.player || []}
-              value={game?.playerValue || 0}
-              label={`👤 ${user?.username || 'Toi'}`}
-            />
-          </div>
-
-          {/* Résultat */}
-          {phase === 'done' && statusInfo && (
-            <div style={{
-              marginTop: 14, padding: '12px 18px',
-              background: statusInfo.bg, border: `1px solid ${statusInfo.color}33`,
-              borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: statusInfo.color }}>
-                  {statusInfo.label}
-                  {game?.doubled && <span style={{ fontSize: 11, color: '#f0c040', marginLeft: 8 }}>× Double</span>}
-                </div>
-                <div style={{ fontSize: 10, color: '#44446a', marginTop: 2 }}>
-                  {game?.playerValue} vs {game?.dealerValue}
-                  {game?.bet_id && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: '#2e2e50' }}>{game.bet_id}</span>}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: statusInfo.color }}>
-                  {game?.payout > 0
-                    ? `+${(game.payout - (game.bet || bet)).toLocaleString()}`
-                    : `-${(game.bet || bet).toLocaleString()}`}
-                </div>
-                <div style={{ fontSize: 10, color: '#44446a' }}>jetons</div>
-              </div>
-            </div>
-          )}
-
-          {phase === 'idle' && (
-            <div style={{ textAlign: 'center', padding: '20px 0', fontSize: 12, color: '#2e2e50' }}>
-              Place ta mise et lance la partie !
-            </div>
-          )}
-
-          {error && (
-            <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(240,64,64,0.08)', border: '1px solid rgba(240,64,64,0.2)', borderRadius: 6, fontSize: 11, color: '#f06060' }}>
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* Panneau contrôle */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 16 }}>
-
-            {phase === 'idle' || phase === 'done' ? (
+        {/* Panneau gauche */}
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <div style={{background:C.surf1,border:`1px solid ${C.border}`,borderRadius:12,padding:14}}>
+            {!isPlaying?(
               <>
-                <BetInput bet={bet} setBet={setBet} disabled={loading} />
-                <button onClick={handleDeal} disabled={loading || bet < 10 || bet > (user?.balance || 0)}
-                  style={{
-                    width: '100%', marginTop: 16,
-                    background: '#f0c040', color: '#07071a',
-                    fontWeight: 800, fontSize: 15, padding: '14px',
-                    borderRadius: 10, border: 'none',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    opacity: loading || bet > (user?.balance || 0) ? 0.5 : 1,
-                    boxShadow: '0 0 20px rgba(240,192,64,0.25)',
-                  }}>
-                  {loading ? 'Distribution...' : phase === 'done' ? '🔄 Nouvelle partie' : '🃏 Distribuer'}
+                <BetInput bet={bet} setBet={setBet} disabled={loading}/>
+                <button onClick={()=>sendAction('deal',bet)} disabled={loading||bet<10||bet>(user?.balance||0)}
+                  style={{width:'100%',marginTop:12,padding:'13px',
+                    background:loading?C.dim:C.gold,color:loading?C.muted:'#06060f',
+                    fontWeight:800,fontSize:15,borderRadius:10,border:'none',
+                    cursor:loading?'not-allowed':'pointer',
+                    opacity:loading||bet>(user?.balance||0)?.5:1,
+                    boxShadow:`0 0 20px ${C.gold}44`,transition:'all .15s'}}>
+                  {loading?'Distribution...':(isDone?'🔄 Nouvelle partie':'🃏 Distribuer')}
                 </button>
               </>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontSize: 11, color: '#5a5a8a', textAlign: 'center', marginBottom: 4 }}>
-                  Mise : <span style={{ color: '#f0c040', fontWeight: 700 }}>{(game?.bet || bet).toLocaleString()} jetons</span>
+            ):(
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                <div style={{textAlign:'center',fontSize:12,color:C.muted,padding:'4px 0'}}>
+                  Mise : <span style={{color:C.gold,fontWeight:700}}>{(game?.bet||bet).toLocaleString()} jetons</span>
                 </div>
-
-                {/* Hit */}
-                <button onClick={() => sendAction('hit')} disabled={loading}
-                  style={{
-                    width: '100%', padding: '13px',
-                    background: '#4080f0', color: '#fff',
-                    fontWeight: 800, fontSize: 14, borderRadius: 10, border: 'none',
-                    cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1,
-                    boxShadow: '0 0 16px rgba(64,128,240,0.3)',
-                  }}>
+                <button onClick={()=>sendAction('hit')} disabled={loading}
+                  style={{width:'100%',padding:'13px',background:'#1e4080',color:'#7eb4f8',
+                    fontWeight:800,fontSize:14,borderRadius:10,border:'1px solid #3060c0',
+                    cursor:loading?'not-allowed':'pointer',opacity:loading?.5:1,
+                    boxShadow:'0 0 14px rgba(64,128,240,0.25)'}}>
                   🃏 Tirer une carte
                 </button>
-
-                {/* Stand */}
-                <button onClick={() => sendAction('stand')} disabled={loading}
-                  style={{
-                    width: '100%', padding: '13px',
-                    background: '#f04040', color: '#fff',
-                    fontWeight: 800, fontSize: 14, borderRadius: 10, border: 'none',
-                    cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1,
-                    boxShadow: '0 0 16px rgba(240,64,64,0.3)',
-                  }}>
+                <button onClick={()=>sendAction('stand')} disabled={loading}
+                  style={{width:'100%',padding:'13px',background:'#3a0808',color:'#f87171',
+                    fontWeight:800,fontSize:14,borderRadius:10,border:'1px solid #8b1a1a',
+                    cursor:loading?'not-allowed':'pointer',opacity:loading?.5:1,
+                    boxShadow:'0 0 14px rgba(239,68,68,0.2)'}}>
                   ✋ Rester
                 </button>
-
-                {/* Double Down */}
-                {canDouble && (
-                  <button onClick={() => sendAction('double')} disabled={loading}
-                    style={{
-                      width: '100%', padding: '11px',
-                      background: 'rgba(240,192,64,0.12)',
-                      border: '1px solid rgba(240,192,64,0.4)',
-                      color: '#f0c040',
-                      fontWeight: 700, fontSize: 13, borderRadius: 10,
-                      cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1,
-                    }}>
-                    💰 Double Down (+{(game?.bet || bet).toLocaleString()})
+                {canDouble&&(
+                  <button onClick={()=>sendAction('double')} disabled={loading}
+                    style={{width:'100%',padding:'11px',background:`${C.gold}18`,
+                      border:`1px solid ${C.gold}40`,color:C.gold,
+                      fontWeight:700,fontSize:13,borderRadius:10,cursor:'pointer'}}>
+                    💰 Double Down (+{(game?.bet||bet).toLocaleString()})
                   </button>
                 )}
-
-                <div style={{ fontSize: 10, color: '#2e2e50', textAlign: 'center', marginTop: 4 }}>
-                  Ta main : <span style={{
-                    color: (game?.playerValue || 0) > 21 ? '#f06060' : (game?.playerValue || 0) === 21 ? '#f0c040' : '#d8d8f0',
-                    fontWeight: 700,
-                  }}>
-                    {game?.playerValue || 0}
+                <div style={{textAlign:'center',fontSize:11,color:C.muted,marginTop:2}}>
+                  Ta main : <span style={{color:(game?.playerValue||0)>21?C.red:(game?.playerValue||0)===21?C.gold:C.txt,fontWeight:700}}>
+                    {game?.playerValue||0}
                   </span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Règles mises à jour */}
-          <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 14 }}>
-            <div style={{ fontSize: 10, color: '#44446a', lineHeight: 1.9 }}>
-              <div style={{ color: '#f0c040', fontWeight: 700, marginBottom: 6, fontSize: 11 }}>📖 Règles</div>
-              <div>🃏 Blackjack = <span style={{ color: '#f0c040' }}>×2.2</span></div>
-              <div>✅ Victoire = <span style={{ color: '#40f080' }}>×1.9</span></div>
-              <div>💰 Double Down = <span style={{ color: '#f0c040' }}>mise doublée</span></div>
-              <div>🤝 Égalité = <span style={{ color: '#8888cc' }}>remboursé</span></div>
-              <div>💥 Dépasser 21 = <span style={{ color: '#f06060' }}>perdu</span></div>
-              <div style={{ marginTop: 4, color: '#2e2e50', fontSize: 9 }}>
-                Dealer tire sur soft 17 · 6 decks
+          {/* Résultat */}
+          {isDone&&statusInfo&&(
+            <div style={{background:statusInfo.bg,border:`1px solid ${statusInfo.color}30`,borderRadius:12,padding:14}}>
+              <div style={{fontSize:15,fontWeight:800,color:statusInfo.color,marginBottom:4}}>
+                {statusInfo.label}
+                {game?.doubled&&<span style={{fontSize:10,color:C.gold,marginLeft:6}}>× Double Down</span>}
               </div>
+              <div style={{fontSize:11,color:C.muted,marginBottom:8}}>{game?.playerValue} vs {game?.dealerValue}</div>
+              <div style={{fontSize:24,fontWeight:900,color:statusInfo.color}}>
+                {game?.payout>0?`+${(game.payout-(game.bet||bet)).toLocaleString()}`:`−${(game.bet||bet).toLocaleString()}`}
+              </div>
+              <div style={{fontSize:11,color:C.muted,marginTop:2}}>jetons</div>
+            </div>
+          )}
+
+          {error&&<div style={{background:`${C.red}10`,border:`1px solid ${C.red}30`,color:C.red,fontSize:11,borderRadius:8,padding:'8px 12px'}}>⚠️ {error}</div>}
+
+          {/* Règles */}
+          <div style={{background:C.surf1,border:`1px solid ${C.border}`,borderRadius:12,padding:14}}>
+            <div style={{fontSize:10,color:C.gold,fontWeight:700,textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>📋 Règles</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:'6px 12px',fontSize:12,alignItems:'center'}}>
+              {[
+                ['🏆 Blackjack naturel',<span style={{color:C.gold,fontWeight:800}}>×2.2</span>],
+                ['✅ Victoire normale', <span style={{color:C.green,fontWeight:800}}>×1.9</span>],
+                ['🤝 Égalité',         <span style={{color:'#8888cc',fontWeight:800}}>×1.0</span>],
+                ['💥 Dépassement',     <span style={{color:C.red,fontWeight:800}}>×0</span>],
+                ['💰 Double Down',     <span style={{color:C.gold,fontWeight:700}}>mise ×2</span>],
+              ].map(([l,v])=>[
+                <div key={l+'l'} style={{color:C.muted}}>{l}</div>,
+                <div key={l+'v'} style={{textAlign:'right'}}>{v}</div>
+              ])}
+            </div>
+            <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${C.border}`,fontSize:10,color:C.muted,lineHeight:1.8}}>
+              <div>🃏 Double Down : uniquement sur total 9, 10 ou 11</div>
+              <div>🎴 Dealer tire obligatoirement jusqu'à 17+</div>
+              <div>🎲 6 decks mélangés · Soft 17 = dealer tire</div>
             </div>
           </div>
 
           {/* Historique */}
-          {history.length > 0 && (
-            <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 9, color: '#2e2e50', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-                Dernières parties
-              </div>
-              {history.map((h, i) => {
-                const info = STATUS_INFO[h.status]
-                return (
-                  <div key={i} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '5px 0', borderBottom: '1px solid #0f0f28', fontSize: 10,
-                  }}>
-                    <div>
-                      <span style={{ color: info?.color }}>{info?.label}</span>
-                      {h.doubled && <span style={{ color: '#f0c040', marginLeft: 4, fontSize: 9 }}>×2</span>}
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 700, color: h.payout > h.bet ? '#40f080' : '#f06060' }}>
-                        {h.payout > h.bet ? `+${(h.payout - h.bet).toLocaleString()}` : `-${h.bet?.toLocaleString()}`}
-                      </div>
-                      {h.bet_id && <div style={{ fontSize: 9, color: '#2e2e50', fontFamily: 'monospace' }}>{h.bet_id}</div>}
+          {history.length>0&&(
+            <div style={{background:C.surf1,border:`1px solid ${C.border}`,borderRadius:12,padding:14}}>
+              <div style={{fontSize:10,color:C.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Dernières parties</div>
+              {history.map((h,i)=>{
+                const info=STATUS_INFO[h.status]
+                const net=h.payout-(h.bet||0)
+                return(
+                  <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                    padding:'5px 0',borderBottom:i<history.length-1?`1px solid ${C.dim}`:'none',fontSize:11}}>
+                    <div style={{color:info?.color,fontSize:11}}>{info?.label}</div>
+                    <div style={{fontWeight:700,color:net>0?C.green:C.red}}>
+                      {net>0?`+${net.toLocaleString()}`:net.toLocaleString()}
                     </div>
                   </div>
                 )
@@ -346,7 +232,45 @@ export default function Blackjack() {
             </div>
           )}
 
-          <LiveFeed compact />
+          <LiveFeed compact/>
+        </div>
+
+        {/* Table */}
+        <div style={{background:C.surf1,border:`1px solid ${C.border}`,borderRadius:16,padding:20,minHeight:480,
+          display:'flex',flexDirection:'column'}}>
+          <div style={{textAlign:'center',marginBottom:16}}>
+            <div style={{fontSize:20,fontWeight:900,color:C.gold,letterSpacing:3}}>BLACKJACK</div>
+          </div>
+          <div style={{background:C.felt,border:`1px solid ${C.feltBorder}`,borderRadius:14,padding:24,
+            flex:1,display:'flex',flexDirection:'column',justifyContent:'space-between',gap:20}}>
+
+            {/* Dealer */}
+            <div>
+              <Hand
+                cards={game?.dealer||[]}
+                value={isDone?game?.dealerValue:(game?.dealer?.[0]?game.dealerValue:0)}
+                label="🎩 Dealer"/>
+            </div>
+
+            <div style={{textAlign:'center',position:'relative',borderTop:`1px dashed ${C.feltBorder}`}}>
+              <span style={{position:'absolute',top:-12,left:'50%',transform:'translateX(-50%)',
+                background:C.felt,padding:'0 12px',fontSize:18}}>🎯</span>
+            </div>
+
+            {/* Joueur */}
+            <div>
+              <Hand
+                cards={game?.player||[]}
+                value={game?.playerValue||0}
+                label={`👤 ${user?.username||'Toi'}`}/>
+            </div>
+          </div>
+
+          {phase==='idle'&&(
+            <div style={{textAlign:'center',padding:'16px 0',fontSize:12,color:C.muted}}>
+              Place ta mise à gauche et lance la partie !
+            </div>
+          )}
         </div>
       </div>
     </div>

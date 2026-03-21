@@ -1,8 +1,7 @@
 // ── Slot Machine ──────────────────────────────────────────────────────────────
-// RTP simulé : ~88% (réduit depuis ~93%)
+// RTP simulé : ~88%
 // Grille : 3 rouleaux × 3 rangées, seule la ligne du milieu compte
 // Wild : Mew — avec 2 différents, prend la forme du moins payant
-// Technique casino : multiplicateurs réduits de ~25% sur tous les symboles
 
 const SYMBOLS = [
   { id: 'mew',        label: 'Mew',        emoji: '✨', weight: 2,  isWild: true  },
@@ -17,30 +16,30 @@ const SYMBOLS = [
   { id: 'magikarp',   label: 'Magicarpe',   emoji: '🐟', weight: 28, isWild: false },
 ];
 
-// Payouts 3x réduits (~25% de moins qu'avant)
+// Payouts 3x — calibrés pour RTP ~88%
 const PAYOUTS_3 = {
-  masterball: 190,
-  dragon:      76,
-  dark:        38,
-  psychic:     19,
-  electric:    10,
-  fire:         4.5,
-  water:        4.5,
-  grass:        4.5,
+  masterball: 261.5,
+  dragon:     104.5,
+  dark:        52.5,
+  psychic:     26,
+  electric:    14,
+  fire:         6,
+  water:        6,
+  grass:        6,
   magikarp:     0.5,
 };
 
-// Payouts 2x réduits (~25% de moins qu'avant)
+// Payouts 2x — calibrés pour RTP ~88%
 const PAYOUTS_2 = {
-  masterball: 19,
-  dragon:      7.5,
-  dark:        4.8,
-  psychic:     2.8,
-  electric:    1.9,
-  fire:        1.4,
-  water:       1.4,
-  grass:       1.4,
-  magikarp:    0,
+  masterball: 26,
+  dragon:     10.5,
+  dark:        6.5,
+  psychic:     4,
+  electric:    2.5,
+  fire:         2,
+  water:        2,
+  grass:        2,
+  magikarp:     0,
 };
 
 const TOTAL_WEIGHT = SYMBOLS.reduce((s, sym) => s + sym.weight, 0);

@@ -6,9 +6,8 @@
 
 function generateCrashPoint() {
   const r = Math.random()
-  if (r >= 0.89) return 1.00
   const crash = Math.floor(89 / (1 - r)) / 100
-  return Math.min(crash, 150)
+  return Math.min(Math.max(crash, 1.00), 150)
 }
 
 function play(betAmount, cashoutAt) {
