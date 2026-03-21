@@ -87,6 +87,10 @@ export default function Sidebar() {
           />
         ))}
 
+        <NavSection label="Bonus" />
+        <NavItem path="/loterie"      icon="🎟️" label="Loterie"      active={isActive('/loterie')} />
+        <NavItem path="/roue-du-jour" icon="🎡" label="Roue du jour" active={isActive('/roue-du-jour')} />
+
         <NavSection label="Compte" />
         <NavItem path="/profil" icon="👤" label="Profil & Stats" active={isActive('/profil')} />
 
