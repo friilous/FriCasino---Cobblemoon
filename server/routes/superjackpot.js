@@ -82,7 +82,11 @@ router.get('/mystatus', async (req, res) => {
       SELECT COALESCE(SUM(bet), 0)::int AS total
       FROM game_history
       WHERE user_id = $1
-        AND created_at > to_char(now() - interval '24 hours', 'YYYY-MM-DD HH24:MI:SS')
+        AND created_at > to_char(
+  date_trunc('day', now()) + interval '20 hours'
+  - CASE WHEN extract(hour from now()) >= 20 THEN interval '0' ELSE interval '1 day' END,
+  'YYYY-MM-DD HH24:MI:SS'
+)
     `, [userId])
 
     const betToday = r.rows[0]?.total ?? 0
