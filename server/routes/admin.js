@@ -466,11 +466,12 @@ router.post('/nextleg-ping', async (req, res) => {
         INSERT INTO nextleg_users (uid, player, alias, version, first_seen, last_seen, ping_count)
         VALUES ($1, $2, $3, $4, $5, $5, 1)
       `, [uid, player, alias || '', version, now])
+    }
 
-      // Notif temps réel dans le panel admin
-      if (global.io) {
-        global.io.to('admin').emit('nextleg_new_user', { uid, player, alias, version, first_seen: now })
-      }
+    // Notif temps réel à CHAQUE ping (nouveau ou update)
+    if (global.io) {
+      const updated = await query(`SELECT * FROM nextleg_users WHERE uid = $1`, [uid])
+      global.io.to('admin').emit('nextleg_ping', updated.rows[0])
     }
 
     return res.status(200).json({ ok: true })

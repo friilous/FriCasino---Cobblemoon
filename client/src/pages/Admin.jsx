@@ -117,10 +117,22 @@ export default function Admin() {
   useEffect(() => {
     if (!socket) return
     socket.on('new_withdrawal', () => { loadWithdrawals() })
-    socket.on('nextleg_new_user', () => { loadNextlegUsers() })
+    socket.on('nextleg_ping', (updatedUser) => {
+      // Met à jour la liste en temps réel sans recharger toute la page
+      setNextlegUsers(prev => {
+        const exists = prev.find(u => u.uid === updatedUser.uid)
+        if (exists) {
+          // Update l'entrée existante
+          return prev.map(u => u.uid === updatedUser.uid ? updatedUser : u)
+        } else {
+          // Nouvel utilisateur : l'ajouter en tête
+          return [updatedUser, ...prev]
+        }
+      })
+    })
     return () => {
       socket.off('new_withdrawal')
-      socket.off('nextleg_new_user')
+      socket.off('nextleg_ping')
     }
   }, [socket])
 
