@@ -17,6 +17,9 @@ import Mines from './pages/games/Mines'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
 import GameGuard from './components/GameGuard'
+import Loterie from './pages/Loterie'
+import RoueDuJour from './pages/RoueDuJour'
+import JackpotBanner from './components/JackpotBanner'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth()
@@ -45,6 +48,7 @@ function AppRoutes() {
     <div style={{ display: 'flex', minHeight: '100vh', background: '#07071a' }}>
       {showSidebar && <Sidebar />}
       <main style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
+        {showSidebar && <JackpotBanner />}
         <Routes>
           <Route path="/"                      element={<Navigate to={user ? '/casino' : '/login'} />} />
           <Route path="/login"                 element={user ? <Navigate to="/casino" /> : <Login />} />
@@ -55,6 +59,8 @@ function AppRoutes() {
           <Route path="/machines"     element={<ProtectedRoute><Machines /></ProtectedRoute>} />
           <Route path="/classement"   element={<ProtectedRoute><Classement /></ProtectedRoute>} />
           <Route path="/joueur/:username" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
+          <Route path="/loterie"      element={<ProtectedRoute><Loterie /></ProtectedRoute>} />
+          <Route path="/roue-du-jour" element={<ProtectedRoute><RoueDuJour /></ProtectedRoute>} />
 
           {/* Jeux */}
           <Route path="/casino/slots"     element={<ProtectedRoute><GameGuard game="slots"><Slots /></GameGuard></ProtectedRoute>} />
