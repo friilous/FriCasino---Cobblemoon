@@ -7,6 +7,7 @@ const SocketContext = createContext(null)
 export function SocketProvider({ children }) {
   const { user } = useAuth()
   const socketRef = useRef(null)
+  const [socket,       setSocket]       = useState(null)  // ← state réactif au lieu de ref
   const [liveFeed,     setLiveFeed]     = useState([])
   const [connected,    setConnected]    = useState(false)
   const [gameSettings, setGameSettings] = useState({
@@ -15,31 +16,29 @@ export function SocketProvider({ children }) {
   })
 
   useEffect(() => {
-    const socket = io(import.meta.env.VITE_API_URL, { transports: ['websocket'] })
-    socketRef.current = socket
+    const sock = io(import.meta.env.VITE_API_URL, { transports: ['websocket'] })
+    socketRef.current = sock
+    setSocket(sock)  // ← déclenche un re-render, Admin.jsx reçoit le vrai socket
 
-    socket.on('connect',    () => setConnected(true))
-    socket.on('disconnect', () => setConnected(false))
-
-    socket.on('live_feed', (event) => {
+    sock.on('connect',    () => setConnected(true))
+    sock.on('disconnect', () => setConnected(false))
+    sock.on('live_feed', (event) => {
       setLiveFeed(prev => [event, ...prev].slice(0, 30))
     })
-
-    // Mise à jour en temps réel des paramètres de jeux
-    socket.on('game_settings_update', ({ game, enabled }) => {
+    sock.on('game_settings_update', ({ game, enabled }) => {
       setGameSettings(prev => ({ ...prev, [game]: enabled }))
     })
 
-    return () => socket.disconnect()
+    return () => sock.disconnect()
   }, [])
 
   // Rejoindre les rooms
   useEffect(() => {
-    if (socketRef.current && user) {
-      socketRef.current.emit('join_user', user.id)
-      if (user.is_admin) socketRef.current.emit('join_admin')
+    if (socket && user) {
+      socket.emit('join_user', user.id)
+      if (user.is_admin) socket.emit('join_admin')
     }
-  }, [user])
+  }, [socket, user])
 
   // Charger les settings initiaux
   useEffect(() => {
@@ -51,7 +50,7 @@ export function SocketProvider({ children }) {
 
   return (
     <SocketContext.Provider value={{
-      socket: socketRef.current,
+      socket,  // ← socket réactif, Admin.jsx le recevra correctement
       liveFeed, setLiveFeed,
       connected,
       gameSettings,
