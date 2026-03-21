@@ -18,6 +18,22 @@ global.io = io
 app.use(cors())
 app.use(express.json())
 
+app.post('/api/admin/reset-data', async (req, res) => {
+  const { secret } = req.body
+  if (secret !== 'frilous-reset-2025') return res.status(403).json({ error: 'Non autorisé' })
+  try {
+    const { query } = require('./db')
+    await query(`TRUNCATE game_history RESTART IDENTITY CASCADE`)
+    await query(`TRUNCATE live_feed RESTART IDENTITY CASCADE`)
+    await query(`TRUNCATE superjackpot_history RESTART IDENTITY CASCADE`)
+    await query(`TRUNCATE wheel_spins RESTART IDENTITY CASCADE`)
+    await query(`UPDATE superjackpot SET amount = 5000`)
+    res.json({ ok: true, message: 'Base nettoyée !' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.use('/api/auth',         require('./routes/auth'))
 app.use('/api/admin',        require('./routes/admin'))
 app.use('/api/games',        require('./routes/games'))
