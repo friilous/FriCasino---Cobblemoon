@@ -194,31 +194,7 @@ export default function Roulette(){
           )}
         </div>
 
-        {/* DROITE — Règles */}
-        <div style={{width:220,flexShrink:0,background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>Gains</div>
-          {CATS.map(cat=>(
-            <div key={cat.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 0',borderBottom:`1px solid ${C.dim}`}}>
-              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <span style={{fontSize:14}}>{cat.emoji}</span>
-                <div><div style={{fontSize:11,fontWeight:700,color:cat.color}}>{cat.label}</div><div style={{fontSize:9,color:C.muted}}>{cat.count}/16 · {Math.round(cat.count/16*100)}% chance</div></div>
-              </div>
-              <div style={{fontSize:14,fontWeight:900,color:cat.color,fontFamily:'monospace'}}>×{cat.payout}</div>
-            </div>
-          ))}
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 0',marginBottom:10}}>
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <span style={{fontSize:14}}>🐟</span>
-              <div><div style={{fontSize:11,fontWeight:700,color:C.red}}>Magicarpe</div><div style={{fontSize:9,color:C.muted}}>1/16 · Segment piège</div></div>
-            </div>
-            <div style={{fontSize:12,color:C.red+'70',fontWeight:900}}>PERTE</div>
-          </div>
-          <div style={{paddingTop:8,borderTop:`1px solid ${C.dim}`,fontSize:10,color:C.muted,lineHeight:1.9}}>
-            <div>🎯 Mise sur une catégorie</div>
-            <div>🐟 Magicarpe = perte totale</div>
-            <div>🎲 Résultat équitable côté serveur</div>
-          </div>
-        </div>
+        
       </div>
 
       <LiveFeed/>
