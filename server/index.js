@@ -40,7 +40,7 @@ app.use('/api/games',        require('./routes/games'))
 app.use('/api/wallet',       require('./routes/wallet'))
 app.use('/api/superjackpot', require('./routes/superjackpot'))
 app.use('/api/wheel',        require('./routes/wheel'))
-app.use('/api/fishing',      require('./routes/fishing'))
+
 
 io.on('connection', (socket) => {
   socket.on('join_user',  (userId) => socket.join(`user_${userId}`))

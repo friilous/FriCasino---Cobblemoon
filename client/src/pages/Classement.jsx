@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom'
 import axios from 'axios'
 
 const C = { bg:'#06060f', surf:'#0c0c1e', border:'#1e1e3a', gold:'#f0b429', green:'#22c55e', red:'#ef4444', txt:'#e2e2f0', muted:'#44446a', dim:'#12121f' }
-const GAME_ICONS = { slots:'🎰', plinko:'⚪', roulette:'🎡', crash:'📈', blackjack:'🃏', mines:'💣', fishing: '🎣' }
-const GAME_NAMES = { all:'Tous', slots:'Slots', plinko:'Plinko', roulette:'Roulette', crash:'Crash', blackjack:'Blackjack', mines:'Mines', fishing:'Fishing' }
-const GAMES      = ['all', 'slots', 'blackjack', 'crash', 'mines', 'roulette', 'plinko', 'fishing']
+const GAME_ICONS = { slots:'🎰', plinko:'⚪', roulette:'🎡', crash:'📈', blackjack:'🃏', mines:'💣' }
+const GAME_NAMES = { all:'Tous', slots:'Slots', plinko:'Plinko', roulette:'Roulette', crash:'Crash', blackjack:'Blackjack', mines:'Mines' }
+const GAMES      = ['all', 'slots', 'blackjack', 'crash', 'mines', 'roulette', 'plinko']
 
 const TABS = [
   { id: 'topBestWin', label: '🏆 Meilleur gain' },

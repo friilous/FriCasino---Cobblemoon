@@ -122,7 +122,7 @@ export default function Blackjack(){
         {/* DROITE — Règles */}
         <div style={{width:220,flexShrink:0,background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
           <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>Règles</div>
-          {[['🏆 Blackjack naturel','×2.5',C.gold],['✅ Victoire','×2.0',C.green],['🤝 Égalité','×1.0','#8888cc'],['💥 Dépasser 21','×0',C.red],['💰 Double Down','mise ×2',C.gold]].map(([l,v,col])=>(
+          {[['🏆 Blackjack naturel','×2.2',C.gold],['✅ Victoire','×1.8',C.green],['🤝 Égalité','×1.0','#8888cc'],['💥 Dépasser 21','×0',C.red],['💰 Double Down','mise ×2',C.gold]].map(([l,v,col])=>(
             <div key={l} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:`1px solid ${C.dim}`}}>
               <span style={{fontSize:11,color:C.muted}}>{l}</span>
               <span style={{fontSize:13,fontWeight:800,color:col,fontFamily:'monospace'}}>{v}</span>

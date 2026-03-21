@@ -168,6 +168,9 @@ export default function SuperJackpot() {
                 {pot.toLocaleString('fr-FR')}
               </div>
               <div style={{ fontSize:16, color:`${C.gold}70`, marginTop:8, fontWeight:600 }}>jetons</div>
+              <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>
+                dont <span style={{ color:`${C.gold}90`, fontWeight:700 }}>{Math.floor(pot * 0.2).toLocaleString('fr-FR')} jetons</span> seront reportés en cagnotte demain
+              </div>
 
               {/* Countdown mis en avant */}
               <div style={{ marginTop:24, display:'inline-flex', flexDirection:'column', alignItems:'center', gap:6, background:'#ffffff08', border:'1px solid #ffffff10', borderRadius:16, padding:'14px 28px' }}>

@@ -10,7 +10,6 @@ const GAMES_LIST = [
   { id: 'blackjack', label: 'Blackjack',        icon: '🃏' },
   { id: 'mines',     label: 'Mines',            icon: '💣' },
   { id: 'plinko',    label: 'Plinko',           icon: '🪀' },
-  { id: 'fishing',   label: 'Shiny Hunt',       icon: '🎣' },
 ]
 
 const BET_FILTERS = [

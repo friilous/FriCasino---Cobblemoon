@@ -27,8 +27,8 @@ const SUITS  = ['♠', '♥', '♦', '♣']
 const VALUES = ['A','2','3','4','5','6','7','8','9','10','J','Q','K']
 
 const PAYOUTS = {
-  blackjack: 2.5,   // 3:2 — généreux pour le joueur
-  win:       2.0,   // paiement normal
+  blackjack: 2.2,   // 3:2 — généreux pour le joueur
+  win:       1.8,   // paiement normal
   push:      1.0,   // remboursement mise
   lose:      0,
 }

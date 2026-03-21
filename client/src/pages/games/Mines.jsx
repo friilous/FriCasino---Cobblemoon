@@ -133,6 +133,11 @@ export default function Mines(){
         {/* CENTRE — Grille */}
         <div style={{flex:1,background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
           <div style={{textAlign:'center'}}><div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>MINES</div><div style={{fontSize:11,color:C.muted,marginTop:3}}>Grille 5×5 · Évite les Voltorbe · Encaisse quand tu veux</div></div>
+          <div style={{background:'#07070f',border:`1px solid ${C.border}`,borderRadius:16,padding:18}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5,62px)',gap:8,justifyContent:'center'}}>
+              {Array.from({length:25},(_,i)=><Cell key={i} i={i} state={cellState(i)} onClick={reveal} disabled={!playing||loading}/>)}
+            </div>
+          </div>
           {playing&&revealed.length>0&&(
             <div style={{display:'flex',alignItems:'center',gap:16,padding:'10px 20px',background:`${C.gold}0a`,border:`1px solid ${C.gold}22`,borderRadius:12}}>
               <div style={{fontSize:11,color:C.muted}}>{revealed.length} case{revealed.length>1?'s':''}</div>
@@ -140,11 +145,6 @@ export default function Mines(){
               <div style={{fontSize:16,fontWeight:700,color:C.green}}>{payout.toLocaleString()} jetons</div>
             </div>
           )}
-          <div style={{background:'#07070f',border:`1px solid ${C.border}`,borderRadius:16,padding:18}}>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(5,62px)',gap:8,justifyContent:'center'}}>
-              {Array.from({length:25},(_,i)=><Cell key={i} i={i} state={cellState(i)} onClick={reveal} disabled={!playing||loading}/>)}
-            </div>
-          </div>
           {phase==='idle'&&<div style={{fontSize:12,color:C.muted}}>Configure ta mise et lance !</div>}
           {history.length>0&&(
             <div style={{display:'flex',gap:5,flexWrap:'wrap',justifyContent:'center'}}>
