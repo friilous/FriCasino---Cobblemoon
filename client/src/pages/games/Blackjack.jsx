@@ -90,7 +90,7 @@ export default function Blackjack(){
             <div style={{background:`${info.color}10`,border:`1px solid ${info.color}30`,borderRadius:12,padding:14}}>
               <div style={{fontSize:14,fontWeight:800,color:info.color,marginBottom:4}}>{info.label}{game?.doubled&&<span style={{fontSize:10,color:C.gold,marginLeft:6}}>× Double</span>}</div>
               <div style={{fontSize:11,color:C.muted,marginBottom:6}}>{game?.playerValue} vs {game?.dealerValue}</div>
-              <div style={{fontSize:24,fontWeight:900,color:info.color}}>{game?.payout>0?`+${(game.payout-(game.bet||bet)).toLocaleString()}`:`−${(game.bet||bet).toLocaleString()}`}</div>
+              <div style={{fontSize:24,fontWeight:900,color:info.color}}>{game?.payout>0?`+${game.payout.toLocaleString()}`:`−${(game.bet||bet).toLocaleString()}`}</div>
               <div style={{fontSize:11,color:C.muted}}>jetons</div>
             </div>
           )}

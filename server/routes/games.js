@@ -33,8 +33,8 @@ function generateBetId(game, dbId) {
 
 async function contributeToSuperJackpot(bet) {
   try {
-    const pct    = 0.01 + Math.random() * 0.02   // entre 1% et 3%
-    const contrib = Math.floor(bet * pct)
+    const pct    = (2 + Math.floor(Math.random() * 3)) / 100
+    const contrib = Math.max(1, Math.floor(bet * pct))
     if (contrib <= 0) return
     await query(
       `UPDATE superjackpot SET amount = amount + $1, updated_at = to_char(now(),'YYYY-MM-DD HH24:MI:SS') WHERE id = 1`,
