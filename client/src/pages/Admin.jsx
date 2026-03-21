@@ -192,6 +192,7 @@ export default function Admin() {
             { id: 'bets',        label: '🎲 Tous les paris' },
             { id: 'live',        label: '📺 Live' },
             { id: 'nextleg',     label: `🟢 Mod NextLeg${nextlegUsers.length > 0 ? ` (${nextlegUsers.length})` : ''}` },
+            { id: 'reset',       label: '🗑️ Reset données' },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
@@ -211,6 +212,7 @@ export default function Admin() {
         {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onRefresh={loadWithdrawals} />}
         {tab === 'live'        && <LiveTab liveFeed={liveFeed} />}
         {tab === 'nextleg'     && <NextlegTab users={nextlegUsers} loading={nextlegLoading} onRefresh={loadNextlegUsers} />}
+        {tab === 'reset'       && <ResetTab />}
         {tab === 'bets' && (
           <BetsTab
             bets={bets} betsTotal={betsTotal} betsLoading={betsLoading}
@@ -888,6 +890,123 @@ function NextlegTab({ users, loading, onRefresh }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Reset données ─────────────────────────────────────────────────────────────
+function ResetTab() {
+  const [step,    setStep]    = useState('idle')  // idle | confirm | loading | done | error
+  const [msg,     setMsg]     = useState('')
+
+  async function doReset() {
+    setStep('loading')
+    try {
+      const { data } = await axios.post('/api/admin/reset-data', { secret: 'frilous-reset-2025' })
+      setMsg(data.message || 'Reset effectué !')
+      setStep('done')
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'Erreur serveur')
+      setStep('error')
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 520 }}>
+      <div style={{ background: '#0a0a20', border: '1px solid rgba(240,64,64,0.3)', borderRadius: 14, padding: 28 }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <span style={{ fontSize: 32 }}>🗑️</span>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#f06060' }}>Reset des données de jeu</div>
+            <div style={{ fontSize: 11, color: '#44446a', marginTop: 3 }}>
+              Supprime l'historique avant la sortie officielle
+            </div>
+          </div>
+        </div>
+
+        {/* Ce qui sera supprimé */}
+        <div style={{ background: '#07071a', border: '1px solid #1e1e40', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#5a5a8a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+            Ce qui sera effacé
+          </div>
+          {[
+            '🎮 Tout l\'historique des parties (game_history)',
+            '📺 Le live feed (live_feed)',
+            '💎 L\'historique du SuperJackpot',
+            '🎡 Les spins de la roue du jour (wheel_spins)',
+            '💰 SuperJackpot remis à 5 000 jetons',
+          ].map((item, i) => (
+            <div key={i} style={{ fontSize: 12, color: '#7070a0', padding: '4px 0', borderBottom: i < 4 ? '1px solid #12122a' : 'none' }}>
+              {item}
+            </div>
+          ))}
+          <div style={{ marginTop: 12, fontSize: 11, color: '#40f080' }}>
+            ✅ Les comptes joueurs et leurs soldes ne sont PAS touchés
+          </div>
+        </div>
+
+        {/* États */}
+        {step === 'idle' && (
+          <button onClick={() => setStep('confirm')} style={{
+            width: '100%', padding: '12px', background: 'rgba(240,64,64,0.1)',
+            border: '1px solid rgba(240,64,64,0.4)', borderRadius: 10,
+            color: '#f06060', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+          }}>
+            🗑️ Réinitialiser les données
+          </button>
+        )}
+
+        {step === 'confirm' && (
+          <div style={{ background: 'rgba(240,64,64,0.06)', border: '1px solid rgba(240,64,64,0.3)', borderRadius: 10, padding: 18, textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#f06060', marginBottom: 6 }}>
+              ⚠️ Es-tu sûr ? Cette action est irréversible.
+            </div>
+            <div style={{ fontSize: 11, color: '#5a5a8a', marginBottom: 16 }}>
+              Toutes les données de jeu seront supprimées définitivement.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setStep('idle')} style={{
+                padding: '9px 20px', borderRadius: 8, border: '1px solid #2a2a4a',
+                background: 'transparent', color: '#9898b8', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+              }}>
+                Annuler
+              </button>
+              <button onClick={doReset} style={{
+                padding: '9px 20px', borderRadius: 8, border: 'none',
+                background: '#dc2626', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 800,
+              }}>
+                ✔ Oui, tout effacer
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'loading' && (
+          <div style={{ textAlign: 'center', padding: '16px', color: '#f0c040', fontSize: 13 }}>
+            ⏳ Reset en cours…
+          </div>
+        )}
+
+        {step === 'done' && (
+          <div style={{ background: 'rgba(64,240,128,0.06)', border: '1px solid rgba(64,240,128,0.25)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 20, marginBottom: 8 }}>✅</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#40f080' }}>{msg}</div>
+            <div style={{ fontSize: 11, color: '#44446a', marginTop: 6 }}>
+              Tu peux maintenant supprimer cette route et ce bouton avant la prochaine mise en prod.
+            </div>
+          </div>
+        )}
+
+        {step === 'error' && (
+          <div style={{ background: 'rgba(240,64,64,0.06)', border: '1px solid rgba(240,64,64,0.25)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#f06060' }}>❌ {msg}</div>
+            <button onClick={() => setStep('idle')} style={{ marginTop: 10, fontSize: 11, color: '#9898b8', background: 'none', border: '1px solid #2a2a4a', borderRadius: 7, padding: '5px 14px', cursor: 'pointer' }}>
+              Réessayer
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
