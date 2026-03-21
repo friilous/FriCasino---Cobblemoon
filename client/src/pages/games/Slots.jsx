@@ -134,10 +134,10 @@ export default function Slots() {
       </div>
 
       {/* Contenu principal */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 280px',gap:12,flex:1,alignItems:'start'}}>
+      <div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:12,flex:1,alignItems:'start'}}>
 
         {/* Machine */}
-        <div style={{background:C.surf,border:`2px solid ${isJP?C.gold:isWin?C.gold+'55':C.border}`,borderRadius:18,padding:24,transition:'border-color .5s,box-shadow .5s',boxShadow:isJP?`0 0 50px ${C.gold}35`:isWin?`0 0 24px ${C.gold}18`:'none',display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
+        <div style={{order:1,flex:1,background:C.surf,border:`2px solid ${isJP?C.gold:isWin?C.gold+'55':C.border}`,borderRadius:18,padding:24,transition:'border-color .5s,box-shadow .5s',boxShadow:isJP?`0 0 50px ${C.gold}35`:isWin?`0 0 24px ${C.gold}18`:'none',display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>SLOT MACHINE</div>
             <div style={{fontSize:11,color:C.muted,marginTop:3}}>Ligne centrale · Mew est Wild · 3 rouleaux</div>
@@ -187,7 +187,7 @@ export default function Slots() {
         </div>
 
         {/* Panneau droite */}
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
           {/* Mise + spin */}
           <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
             <BetInput bet={bet} setBet={setBet} disabled={spinning}/>

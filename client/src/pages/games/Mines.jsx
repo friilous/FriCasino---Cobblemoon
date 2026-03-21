@@ -73,7 +73,7 @@ export default function Mines(){
         <span style={{fontSize:13,color:C.gold,fontWeight:700}}>💣 Mines</span>
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 280px',gap:12,alignItems:'start'}}>
+      <div style={{display:'flex',gap:12,alignItems:'start'}}>
 
         {/* Grille */}
         <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
@@ -92,7 +92,7 @@ export default function Mines(){
           )}
 
           {/* Grille */}
-          <div style={{background:'#07070f',border:`1px solid ${C.border}`,borderRadius:16,padding:18}}>
+          <div style={{order:1,background:'#07070f',border:`1px solid ${C.border}`,borderRadius:16,padding:18}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(5,62px)',gap:8,justifyContent:'center'}}>
               {Array.from({length:25},(_,i)=><Cell key={i} i={i} state={cellState(i)} onClick={reveal} disabled={!playing||loading}/>)}
             </div>
@@ -127,7 +127,7 @@ export default function Mines(){
         </div>
 
         {/* Panneau droite */}
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
           {/* Contrôles */}
           <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
             {!playing?(

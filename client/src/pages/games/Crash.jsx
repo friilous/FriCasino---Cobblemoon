@@ -90,10 +90,10 @@ export default function Crash(){
         <span style={{fontSize:13,color:C.gold,fontWeight:700}}>📈 Crash</span>
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 280px',gap:12,alignItems:'start'}}>
+      <div style={{display:'flex',gap:12,alignItems:'start'}}>
 
         {/* Canvas */}
-        <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:20,display:'flex',flexDirection:'column',gap:14}}>
+        <div style={{order:1,flex:1,background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:20,display:'flex',flexDirection:'column',gap:14}}>
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>CRASH</div>
             <div style={{fontSize:11,color:C.muted,marginTop:3}}>Encaisse avant l'explosion</div>
@@ -130,7 +130,7 @@ export default function Crash(){
         </div>
 
         {/* Panneau droite */}
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
           <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
             <BetInput bet={bet} setBet={setBet} disabled={running||waiting}/>
             <div style={{marginTop:14}}>

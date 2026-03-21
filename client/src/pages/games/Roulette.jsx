@@ -111,10 +111,10 @@ export default function Roulette(){
         <span style={{fontSize:13,color:C.gold,fontWeight:700}}>🎡 Roulette Pokémon</span>
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 280px',gap:12,alignItems:'start'}}>
+      <div style={{display:'flex',gap:12,alignItems:'start'}}>
 
         {/* Roue */}
-        <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
+        <div style={{order:1,flex:1,background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>ROULETTE POKÉMON</div>
             <div style={{fontSize:11,color:C.muted,marginTop:3}}>16 segments · <span style={{color:C.red}}>🐟 Magicarpe = perte totale</span></div>
@@ -168,7 +168,7 @@ export default function Roulette(){
         </div>
 
         {/* Panneau droite */}
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
           {/* Mise + spin */}
           <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
             <BetInput bet={bet} setBet={setBet} disabled={inProg}/>
