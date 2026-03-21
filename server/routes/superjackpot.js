@@ -12,6 +12,19 @@ function randomContrib(bet) {
   return Math.floor(bet * pct)
 }
 
+// Fenêtre depuis le dernier 20h00 heure Paris — reset à chaque tirage
+const SINCE_LAST_DRAW = `
+  to_char(
+    date_trunc('day', now() AT TIME ZONE 'Europe/Paris')
+    + interval '20 hours'
+    - CASE WHEN (now() AT TIME ZONE 'Europe/Paris')::time >= '20:00:00'
+      THEN interval '0'
+      ELSE interval '1 day'
+    END,
+    'YYYY-MM-DD HH24:MI:SS'
+  )
+`
+
 // ── Init tables ───────────────────────────────────────────────────────────────
 async function initTables() {
   await query(`CREATE TABLE IF NOT EXISTS superjackpot (
@@ -44,11 +57,11 @@ router.get('/', async (req, res) => {
     const r   = await query('SELECT amount, updated_at FROM superjackpot WHERE id = 1')
     const row = r.rows[0]
 
-    // Nombre de joueurs éligibles (ont misé >= 5000 jetons dans les 24h)
+    // Nombre de joueurs éligibles depuis le dernier tirage à 20h
     const er = await query(`
       SELECT COUNT(DISTINCT user_id)::int AS count
       FROM game_history
-      WHERE created_at > to_char(now() - interval '24 hours', 'YYYY-MM-DD HH24:MI:SS')
+      WHERE created_at > ${SINCE_LAST_DRAW}
       GROUP BY user_id
       HAVING SUM(bet) >= $1
     `, [ELIGIBILITY_THRESHOLD])
@@ -82,14 +95,7 @@ router.get('/mystatus', async (req, res) => {
       SELECT COALESCE(SUM(bet), 0)::int AS total
       FROM game_history
       WHERE user_id = $1
-        AND created_at > to_char(
-  date_trunc('day', now() AT TIME ZONE 'Europe/Paris') 
-  + interval '20 hours'
-  - CASE WHEN extract(hour from now() AT TIME ZONE 'Europe/Paris') >= 20 
-    THEN interval '0' 
-    ELSE interval '1 day' END,
-  'YYYY-MM-DD HH24:MI:SS'
-)
+        AND created_at > ${SINCE_LAST_DRAW}
     `, [userId])
 
     const betToday = r.rows[0]?.total ?? 0
@@ -116,12 +122,12 @@ router.post('/draw', async (req, res) => {
     const r   = await query('SELECT amount FROM superjackpot WHERE id = 1')
     const pot = r.rows[0]?.amount ?? 0
 
-    // Trouver les joueurs éligibles (ont misé >= seuil dans les 24h)
+    // Trouver les joueurs éligibles depuis le dernier tirage à 20h
     const er = await query(`
       SELECT u.id, u.username, SUM(gh.bet)::int AS total_bet
       FROM game_history gh
       JOIN users u ON u.id = gh.user_id
-      WHERE gh.created_at > to_char(now() - interval '24 hours', 'YYYY-MM-DD HH24:MI:SS')
+      WHERE gh.created_at > ${SINCE_LAST_DRAW}
       GROUP BY u.id, u.username
       HAVING SUM(gh.bet) >= $1
     `, [ELIGIBILITY_THRESHOLD])
