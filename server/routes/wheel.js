@@ -59,8 +59,8 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const lastSpin = new Date(row.last_spin)
     const diff     = Date.now() - lastSpin
-    const canSpin  = diff >= 10 * 1000
-    const nextSpin = canSpin ? null : new Date(lastSpin.getTime() + 10 * 1000)
+    const canSpin  = diff >= 24 * 60 * 60 * 1000
+    const nextSpin = canSpin ? null : new Date(lastSpin.getTime() + 24 * 60 * 60 * 1000)
     res.json({ can_spin:canSpin, next_spin:nextSpin, total_won:row.total_won, spins:row.spins, segments:SEGMENTS })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -75,8 +75,8 @@ router.post('/spin', authMiddleware, async (req, res) => {
     // Vérif cooldown 24h
     if (row) {
       const diff = now - new Date(row.last_spin)
-      if (diff < 10 * 1000) {
-        const nextSpin = new Date(new Date(row.last_spin).getTime() + 10 * 1000)
+      if (diff < 24 * 60 * 60 * 1000) {
+        const nextSpin = new Date(new Date(row.last_spin).getTime() + 24 * 60 * 60 * 1000)
         return res.status(429).json({ error:"Déjà utilisé aujourd'hui", next_spin:nextSpin })
       }
     }
@@ -110,7 +110,7 @@ router.post('/spin', authMiddleware, async (req, res) => {
 
     const ur   = await query('SELECT username, balance FROM users WHERE id = $1', [req.user.id])
     const user = ur.rows[0]
-    const nextSpin = new Date(now.getTime() + 10 * 1000)
+    const nextSpin = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
     // Sockets
     if (global.io) {

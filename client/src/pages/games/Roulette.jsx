@@ -110,14 +110,14 @@ export default function Roulette(){
 
       <div style={{display:'flex',gap:12,alignItems:'start',flex:1}}>
 
-        {/* GAUCHE — Contrôles + Catégories */}
-        <div style={{width:220,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
+        {/* GAUCHE — Mise + Résultat + Historique */}
+        <div style={{width:200,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
           <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
             <BetInput bet={bet} setBet={setBet} disabled={inProg}/>
             {err&&<div style={{marginTop:8,fontSize:11,color:C.red,background:`${C.red}10`,border:`1px solid ${C.red}25`,borderRadius:8,padding:'7px 10px'}}>⚠ {err}</div>}
             <button onClick={spin} disabled={inProg||!sel||bet<10||bet>(user?.balance??0)}
               style={{width:'100%',marginTop:12,padding:'14px',background:inProg?C.dim:!sel?C.dim:C.gold,color:inProg||!sel?C.muted:'#06060f',fontWeight:800,fontSize:16,borderRadius:10,border:'none',cursor:inProg||!sel?'not-allowed':'pointer',opacity:!sel?.6:bet>(user?.balance??0)?.5:1,boxShadow:inProg||!sel?'none':`0 0 20px ${C.gold}44`,transition:'all .15s'}}>
-              {inProg?'En cours…':!sel?'Choisis ↓':'🎡 Miser'}
+              {inProg?'En cours…':!sel?'Choisis →':'🎡 Miser'}
             </button>
           </div>
 
@@ -127,48 +127,11 @@ export default function Roulette(){
                 {wCat&&<img src={SPRITE(wCat.id==='magikarp'?129:wCat.pokemons?.[0]?.dex??151)} alt="" style={{width:32,height:32,imageRendering:'pixelated',filter:isMag?'brightness(.5) sepia(1)':`drop-shadow(0 0 8px ${wCat.color})`}}/>}
                 <div><div style={{fontSize:12,fontWeight:800,color:isMag?C.red:wCat?.color}}>{wCat?.emoji} {wCat?.label}</div><div style={{fontSize:10,color:C.muted}}>Segment tombé</div></div>
               </div>
-              <div style={{fontSize:22,fontWeight:900,color:isMag?C.red:isWin?C.green:C.red}}>{isMag||!isWin?`−${bet.toLocaleString()}`:`+${result.payout.toLocaleString()}`}</div>
+              <div style={{fontSize:22,fontWeight:900,color:isMag?C.red:isWin?C.green:C.red}}>{isMag||!isWin?`−${bet.toLocaleString()}` :`+${result.payout.toLocaleString()}`}</div>
               {isWin&&!isMag&&<div style={{fontSize:11,color:C.muted}}>jetons · ×{result.multiplier}</div>}
               {(!isWin||isMag)&&<div style={{fontSize:11,color:C.muted}}>jetons</div>}
             </div>
           )}
-
-          {/* Catégories */}
-          <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:12}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Catégories</div>
-            <div style={{display:'flex',flexDirection:'column',gap:5}}>
-              {CATS.map(cat=>{
-                const isSel=sel===cat.id
-                return(
-                  <div key={cat.id} onClick={()=>!inProg&&pick(cat.id)}
-                    style={{background:isSel?cat.color+'18':'#07071a',border:`2px solid ${isSel?cat.color:C.border}`,borderRadius:9,padding:'7px 10px',cursor:inProg?'not-allowed':'pointer',transition:'all .15s',boxShadow:isSel?`0 0 10px ${cat.color}25`:'none'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-                      <div style={{display:'flex',alignItems:'center',gap:5}}>
-                        <span style={{fontSize:14}}>{cat.emoji}</span>
-                        <div>
-                          <div style={{fontSize:11,fontWeight:800,color:isSel?cat.color:C.txt}}>{cat.label}</div>
-                          <div style={{fontSize:9,color:C.muted}}>{cat.count}/16 · {Math.round(cat.count/16*100)}%</div>
-                        </div>
-                      </div>
-                      <div style={{fontSize:13,fontWeight:900,color:isSel?'#000':cat.color,background:isSel?cat.color:'transparent',padding:'1px 8px',borderRadius:14,border:`1px solid ${cat.color}${isSel?'':'45'}`,fontFamily:'monospace',transition:'all .15s',flexShrink:0}}>×{cat.payout}</div>
-                    </div>
-                    <div style={{display:'flex',gap:2}}>
-                      {cat.pokemons.map(p=><img key={p.dex} src={SPRITE(p.dex)} alt="" style={{width:20,height:20,imageRendering:'pixelated',filter:isSel?`drop-shadow(0 0 4px ${cat.color}) brightness(1.1)`:'brightness(.5)',transition:'filter .15s'}}/>)}
-                    </div>
-                  </div>
-                )
-              })}
-              <div style={{background:'#0a0005',border:`1px solid ${C.red}28`,borderRadius:9,padding:'7px 10px',opacity:.65}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:5}}>
-                    <span style={{fontSize:14}}>🐟</span>
-                    <div><div style={{fontSize:11,fontWeight:800,color:C.red}}>Magicarpe <span style={{fontSize:8,background:`${C.red}22`,padding:'1px 5px',borderRadius:4}}>PIÈGE</span></div><div style={{fontSize:9,color:C.muted}}>1/16 · Non pariable</div></div>
-                  </div>
-                  <div style={{fontSize:12,color:C.red+'55',fontWeight:900,fontFamily:'monospace'}}>×0</div>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {history.length>0&&(
             <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
@@ -179,7 +142,10 @@ export default function Roulette(){
 
         {/* CENTRE — Roue */}
         <div style={{flex:1,background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
-          <div style={{textAlign:'center'}}><div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>ROULETTE POKÉMON</div><div style={{fontSize:11,color:C.muted,marginTop:3}}>16 segments · <span style={{color:C.red}}>🐟 Magicarpe = perte</span></div></div>
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>ROULETTE POKÉMON</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:3}}>16 segments · <span style={{color:C.red}}>🐟 Magicarpe = perte</span></div>
+          </div>
           <Wheel selId={sel} winId={winId} winIdx={winIdx} spinning={spinning}/>
           {selCat&&!spinning&&!winId&&(
             <div style={{padding:'8px 16px',background:selCat.color+'10',border:`1px solid ${selCat.color}25`,borderRadius:10,fontSize:12,color:C.muted}}>
@@ -194,7 +160,60 @@ export default function Roulette(){
           )}
         </div>
 
-        
+        {/* DROITE — Catégories */}
+        <div style={{width:230,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
+          <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>
+              Choisis une catégorie
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:5}}>
+              {CATS.map(cat=>{
+                const isSel=sel===cat.id
+                return(
+                  <div key={cat.id} onClick={()=>!inProg&&pick(cat.id)}
+                    style={{background:isSel?cat.color+'18':'#07071a',border:`2px solid ${isSel?cat.color:C.border}`,borderRadius:9,padding:'8px 10px',cursor:inProg?'not-allowed':'pointer',transition:'all .15s',boxShadow:isSel?`0 0 12px ${cat.color}30`:'none'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        <span style={{fontSize:16}}>{cat.emoji}</span>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:800,color:isSel?cat.color:C.txt}}>{cat.label}</div>
+                          <div style={{fontSize:9,color:C.muted}}>{cat.count}/16 · {Math.round(cat.count/16*100)}%</div>
+                        </div>
+                      </div>
+                      <div style={{fontSize:14,fontWeight:900,color:isSel?'#000':cat.color,background:isSel?cat.color:'transparent',padding:'2px 9px',borderRadius:14,border:`1px solid ${cat.color}${isSel?'':'45'}`,fontFamily:'monospace',transition:'all .15s',flexShrink:0}}>
+                        ×{cat.payout}
+                      </div>
+                    </div>
+                    <div style={{display:'flex',gap:3}}>
+                      {cat.pokemons.map(p=>(
+                        <img key={p.dex} src={SPRITE(p.dex)} alt=""
+                          style={{width:22,height:22,imageRendering:'pixelated',filter:isSel?`drop-shadow(0 0 4px ${cat.color}) brightness(1.1)`:'brightness(.5)',transition:'filter .15s'}}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Magicarpe */}
+              <div style={{background:'#0a0005',border:`1px solid ${C.red}28`,borderRadius:9,padding:'8px 10px',opacity:.65}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{fontSize:16}}>🐟</span>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:800,color:C.red}}>
+                        Magicarpe <span style={{fontSize:8,background:`${C.red}22`,padding:'1px 5px',borderRadius:4}}>PIÈGE</span>
+                      </div>
+                      <div style={{fontSize:9,color:C.muted}}>1/16 · Non pariable</div>
+                    </div>
+                  </div>
+                  <div style={{fontSize:12,color:C.red+'55',fontWeight:900,fontFamily:'monospace'}}>×0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <LiveFeed/>

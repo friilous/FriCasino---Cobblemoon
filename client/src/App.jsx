@@ -24,8 +24,8 @@ import JackpotBanner from './components/JackpotBanner'
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth()
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07071a' }}>
-      <div style={{ color: '#f0c040', fontSize: 18, fontWeight: 700 }}>Chargement...</div>
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#07071a' }}>
+      <div style={{ color:'#f0c040', fontSize:18, fontWeight:700 }}>Chargement...</div>
     </div>
   )
   if (!user) return <Navigate to="/login" replace />
@@ -42,37 +42,42 @@ function AppRoutes() {
   const showSidebar = user && !NO_SIDEBAR_PATHS.includes(location.pathname)
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#07071a' }}>
+    <div style={{ display:'flex', minHeight:'100vh', background:'#07071a' }}>
       {showSidebar && <Sidebar />}
-      <main style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
-        {showSidebar && <JackpotBanner />}
-        <Routes>
-          <Route path="/"                     element={<Navigate to={user ? '/casino' : '/login'} />} />
-          <Route path="/login"                element={user ? <Navigate to="/casino" /> : <Login />} />
-          <Route path="/changer-mot-de-passe" element={<ChangePassword />} />
 
-          {/* Lobby */}
-          <Route path="/casino"           element={<ProtectedRoute><Casino /></ProtectedRoute>} />
-          <Route path="/machines"         element={<ProtectedRoute><Machines /></ProtectedRoute>} />
-          <Route path="/classement"       element={<ProtectedRoute><Classement /></ProtectedRoute>} />
-          <Route path="/joueur/:username" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
-          <Route path="/superjackpot"     element={<ProtectedRoute><SuperJackpot /></ProtectedRoute>} />
-          <Route path="/roue-du-jour"     element={<ProtectedRoute><RoueDuJour /></ProtectedRoute>} />
+      {/* main avec bannière sticky en haut */}
+      <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden' }}>
+        {showSidebar && (
+          <div style={{ position:'sticky', top:0, zIndex:50, flexShrink:0 }}>
+            <JackpotBanner />
+          </div>
+        )}
+        <main style={{ flex:1, overflowY:'auto' }}>
+          <Routes>
+            <Route path="/"                     element={<Navigate to={user ? '/casino' : '/login'} />} />
+            <Route path="/login"                element={user ? <Navigate to="/casino" /> : <Login />} />
+            <Route path="/changer-mot-de-passe" element={<ChangePassword />} />
 
-          {/* Jeux */}
-          <Route path="/casino/slots"     element={<ProtectedRoute><GameGuard game="slots"><Slots /></GameGuard></ProtectedRoute>} />
-          <Route path="/casino/plinko"    element={<ProtectedRoute><GameGuard game="plinko"><Plinko /></GameGuard></ProtectedRoute>} />
-          <Route path="/casino/roulette"  element={<ProtectedRoute><GameGuard game="roulette"><Roulette /></GameGuard></ProtectedRoute>} />
-          <Route path="/casino/crash"     element={<ProtectedRoute><GameGuard game="crash"><Crash /></GameGuard></ProtectedRoute>} />
-          <Route path="/casino/blackjack" element={<ProtectedRoute><GameGuard game="blackjack"><Blackjack /></GameGuard></ProtectedRoute>} />
-          <Route path="/casino/mines"     element={<ProtectedRoute><GameGuard game="mines"><Mines /></GameGuard></ProtectedRoute>} />
+            <Route path="/casino"           element={<ProtectedRoute><Casino /></ProtectedRoute>} />
+            <Route path="/machines"         element={<ProtectedRoute><Machines /></ProtectedRoute>} />
+            <Route path="/classement"       element={<ProtectedRoute><Classement /></ProtectedRoute>} />
+            <Route path="/joueur/:username" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
+            <Route path="/superjackpot"     element={<ProtectedRoute><SuperJackpot /></ProtectedRoute>} />
+            <Route path="/roue-du-jour"     element={<ProtectedRoute><RoueDuJour /></ProtectedRoute>} />
 
-          {/* Compte */}
-          <Route path="/profil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/admin"  element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
-          <Route path="*"       element={<Navigate to="/" />} />
-        </Routes>
-      </main>
+            <Route path="/casino/slots"     element={<ProtectedRoute><GameGuard game="slots"><Slots /></GameGuard></ProtectedRoute>} />
+            <Route path="/casino/plinko"    element={<ProtectedRoute><GameGuard game="plinko"><Plinko /></GameGuard></ProtectedRoute>} />
+            <Route path="/casino/roulette"  element={<ProtectedRoute><GameGuard game="roulette"><Roulette /></GameGuard></ProtectedRoute>} />
+            <Route path="/casino/crash"     element={<ProtectedRoute><GameGuard game="crash"><Crash /></GameGuard></ProtectedRoute>} />
+            <Route path="/casino/blackjack" element={<ProtectedRoute><GameGuard game="blackjack"><Blackjack /></GameGuard></ProtectedRoute>} />
+            <Route path="/casino/mines"     element={<ProtectedRoute><GameGuard game="mines"><Mines /></GameGuard></ProtectedRoute>} />
+
+            <Route path="/profil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/admin"  element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
+            <Route path="*"       element={<Navigate to="/" />} />
+          </Routes>
+        </main>
+      </div>
     </div>
   )
 }
