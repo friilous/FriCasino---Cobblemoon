@@ -8,6 +8,7 @@ const NAV_GAMES = [
   { path: '/casino/blackjack', label: 'Blackjack',  icon: '🃏' },
   { path: '/casino/mines',     label: 'Mines',      icon: '💣' },
   { path: '/casino/plinko',    label: 'Plinko',     icon: '🪀' },
+  { path: '/casino/fishing', label: 'Shiny Hunt', icon: '🎣' },
 ]
 
 export default function Sidebar() {

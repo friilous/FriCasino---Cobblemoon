@@ -155,7 +155,7 @@ router.post('/draw', async (req, res) => {
 // ── Cron : tirage tous les jours à 20h heure française ───────────────────────
 function checkDraw() {
   const now    = new Date()
-  const frHour = (now.getUTCHours() + 1) % 24  // UTC+1 approx (pas de gestion DST)
+  const frHour = (now.getUTCHours() + 2) % 24  // UTC+1 approx (pas de gestion DST)
   if (frHour === 20 && now.getUTCMinutes() === 0) {
     query('SELECT amount FROM superjackpot WHERE id = 1').then(r => {
       // On tire toujours, même si la cagnotte est au minimum

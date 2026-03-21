@@ -20,6 +20,7 @@ import GameGuard from './components/GameGuard'
 import SuperJackpot from './pages/SuperJackpot'
 import RoueDuJour from './pages/RoueDuJour'
 import JackpotBanner from './components/JackpotBanner'
+import Fishing from './pages/games/Fishing'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth()
@@ -71,6 +72,7 @@ function AppRoutes() {
             <Route path="/casino/crash"     element={<ProtectedRoute><GameGuard game="crash"><Crash /></GameGuard></ProtectedRoute>} />
             <Route path="/casino/blackjack" element={<ProtectedRoute><GameGuard game="blackjack"><Blackjack /></GameGuard></ProtectedRoute>} />
             <Route path="/casino/mines"     element={<ProtectedRoute><GameGuard game="mines"><Mines /></GameGuard></ProtectedRoute>} />
+            <Route path="/casino/fishing"   element={<ProtectedRoute><GameGuard game="fishing"><Fishing /></GameGuard></ProtectedRoute>} />
 
             <Route path="/profil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/admin"  element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />

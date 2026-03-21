@@ -195,7 +195,7 @@ function CountdownTimer() {
   useEffect(() => {
     function upd() {
       const now    = new Date()
-      const frNow  = new Date(now.getTime() + 60 * 60 * 1000)
+      const frNow = new Date(now.getTime() + 2 * 60 * 60 * 1000)
       const target = new Date(frNow)
       target.setHours(20, 0, 0, 0)
       if (frNow >= target) target.setDate(target.getDate() + 1)
