@@ -83,8 +83,11 @@ router.get('/mystatus', async (req, res) => {
       FROM game_history
       WHERE user_id = $1
         AND created_at > to_char(
-  date_trunc('day', now()) + interval '20 hours'
-  - CASE WHEN extract(hour from now()) >= 20 THEN interval '0' ELSE interval '1 day' END,
+  date_trunc('day', now() AT TIME ZONE 'Europe/Paris') 
+  + interval '20 hours'
+  - CASE WHEN extract(hour from now() AT TIME ZONE 'Europe/Paris') >= 20 
+    THEN interval '0' 
+    ELSE interval '1 day' END,
   'YYYY-MM-DD HH24:MI:SS'
 )
     `, [userId])
