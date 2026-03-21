@@ -23,8 +23,8 @@ function Cell({i,state,onClick,disabled}){
   const base={width:62,height:62,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',cursor:disabled?'default':'pointer',transition:'all .15s',position:'relative',overflow:'hidden'}
   if(state==='hidden')return<div onClick={()=>!disabled&&onClick(i)} style={{...base,background:'#0d0d28',border:`1px solid ${C.border}`,cursor:disabled?'not-allowed':'pointer'}} onMouseEnter={e=>{if(!disabled)e.currentTarget.style.borderColor=C.gold+'70'}} onMouseLeave={e=>{if(!disabled)e.currentTarget.style.borderColor=C.border}}><span style={{fontSize:20,opacity:.2,color:C.muted}}>?</span></div>
   if(state==='token')return<div style={{...base,background:`${C.gold}12`,border:`1px solid ${C.gold}45`}}><canvas ref={cv} width={64} height={64} style={{position:'absolute',inset:0}}/></div>
-  if(state==='mine')return<div style={{...base,background:`${C.red}28`,border:`2px solid ${C.red}80`,boxShadow:`0 0 18px ${C.red}50`}}><img src={SPRITE(100)} alt="Voltorbe" style={{width:54,height:54,imageRendering:'pixelated'}}/></div>
-  if(state==='mine_other')return<div style={{...base,background:`${C.red}08`,border:`1px solid ${C.red}28`,opacity:.55}}><img src={SPRITE(100)} alt="Voltorbe" style={{width:50,height:50,imageRendering:'pixelated',filter:'grayscale(.6)'}}/></div>
+  if(state==='mine')return<div style={{...base,background:`${C.red}28`,border:`2px solid ${C.red}80`,boxShadow:`0 0 18px ${C.red}50`}}><img src={SPRITE(100)} alt="" style={{width:54,height:54,imageRendering:'pixelated'}}/></div>
+  if(state==='mine_other')return<div style={{...base,background:`${C.red}08`,border:`1px solid ${C.red}28`,opacity:.55}}><img src={SPRITE(100)} alt="" style={{width:50,height:50,imageRendering:'pixelated',filter:'grayscale(.6)'}}/></div>
   return null
 }
 
@@ -40,7 +40,6 @@ export default function Mines(){
     if(['exploded','cashed','won'].includes(phase)){if(i===hit)return'mine';if(minePos.includes(i))return'mine_other';if(revealed.includes(i))return'token'}
     if(revealed.includes(i))return'token';return'hidden'
   }
-
   async function start(){
     if(bet<10||bet>(user?.balance||0))return;setLoading(true);setErr('')
     try{const{data}=await axios.post('/api/games/mines',{action:'start',bet,minesCount:mines});updateBalance(data.balance);setPhase('playing');setRevealed([]);setMinePos([]);setMult(1);setPayout(0);setHit(null)}
@@ -63,7 +62,6 @@ export default function Mines(){
   const playing=phase==='playing',done=['exploded','cashed','won'].includes(phase)
   const canCashout=playing&&revealed.length>0&&!loading
   const statusCol=phase==='exploded'?C.red:C.green
-  const firstMult=(0.92*(25/(25-mines))).toFixed(2)
 
   return(
     <div style={{minHeight:'100vh',background:C.bg,padding:'16px',boxSizing:'border-box',display:'flex',flexDirection:'column',gap:12}}>
@@ -73,62 +71,10 @@ export default function Mines(){
         <span style={{fontSize:13,color:C.gold,fontWeight:700}}>💣 Mines</span>
       </div>
 
-      <div style={{display:'flex',gap:12,alignItems:'start'}}>
+      <div style={{display:'flex',gap:12,alignItems:'start',flex:1}}>
 
-        {/* Grille */}
-        <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
-          <div style={{textAlign:'center'}}>
-            <div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>MINES</div>
-            <div style={{fontSize:11,color:C.muted,marginTop:3}}>Grille 5×5 · Évite les Voltorbe · Encaisse quand tu veux</div>
-          </div>
-
-          {/* Indicateur en cours */}
-          {playing&&revealed.length>0&&(
-            <div style={{display:'flex',alignItems:'center',gap:16,padding:'10px 20px',background:`${C.gold}0a`,border:`1px solid ${C.gold}25`,borderRadius:12}}>
-              <div style={{fontSize:11,color:C.muted}}>{revealed.length} case{revealed.length>1?'s':''}</div>
-              <div style={{fontSize:22,fontWeight:900,color:C.gold}}>×{mult}</div>
-              <div style={{fontSize:16,fontWeight:700,color:C.green}}>{payout.toLocaleString()} jetons</div>
-            </div>
-          )}
-
-          {/* Grille */}
-          <div style={{order:1,background:'#07070f',border:`1px solid ${C.border}`,borderRadius:16,padding:18}}>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(5,62px)',gap:8,justifyContent:'center'}}>
-              {Array.from({length:25},(_,i)=><Cell key={i} i={i} state={cellState(i)} onClick={reveal} disabled={!playing||loading}/>)}
-            </div>
-          </div>
-
-          {/* Résultat */}
-          {done&&(
-            <div style={{width:'100%',maxWidth:380,padding:'12px 20px',background:phase==='exploded'?`${C.red}08`:`${C.green}0e`,border:`1px solid ${statusCol}28`,borderRadius:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div>
-                <div style={{fontSize:15,fontWeight:800,color:statusCol}}>{phase==='exploded'?'💥 Voltorbe !':phase==='won'?'🏆 Grille complète !':` ✅ Encaissé ×${mult}`}</div>
-                <div style={{fontSize:11,color:C.muted,marginTop:2}}>{revealed.length} case{revealed.length>1?'s':''} · {mines} Voltorbe{mines>1?'s':''}</div>
-              </div>
-              <div style={{textAlign:'right'}}>
-                <div style={{fontSize:24,fontWeight:900,color:statusCol}}>{phase==='exploded'?`−${bet.toLocaleString()}`:`+${(payout-bet).toLocaleString()}`}</div>
-                <div style={{fontSize:11,color:C.muted}}>jetons</div>
-              </div>
-            </div>
-          )}
-
-          {phase==='idle'&&<div style={{fontSize:12,color:C.muted}}>Configure ta mise et lance !</div>}
-
-          {/* Pills historique */}
-          {history.length>0&&(
-            <div style={{display:'flex',gap:6,flexWrap:'wrap',justifyContent:'center'}}>
-              {history.map((h,i)=>(
-                <div key={i} style={{fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:20,background:h.status==='exploded'?`${C.red}10`:`${C.green}12`,border:`1px solid ${h.status==='exploded'?C.red+'25':C.green+'30'}`,color:h.status==='exploded'?C.red:C.green}}>
-                  {h.status==='exploded'?'💥 Voltorbe':`+${(h.payout-h.bet).toLocaleString()}`}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Panneau droite */}
-        <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
-          {/* Contrôles */}
+        {/* GAUCHE */}
+        <div style={{width:220,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
           <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
             {!playing?(
               <>
@@ -143,7 +89,7 @@ export default function Mines(){
                 </div>
                 <div style={{marginTop:10,padding:'8px 10px',background:C.dim,border:`1px solid ${C.border}`,borderRadius:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <span style={{fontSize:11,color:C.muted}}>1ère case sûre</span>
-                  <span style={{fontSize:13,color:C.gold,fontWeight:700}}>×{firstMult}</span>
+                  <span style={{fontSize:13,color:C.gold,fontWeight:700}}>×{(0.92*(25/(25-mines))).toFixed(2)}</span>
                 </div>
                 {err&&<div style={{marginTop:8,fontSize:11,color:C.red,background:`${C.red}10`,border:`1px solid ${C.red}25`,borderRadius:8,padding:'7px 10px'}}>⚠ {err}</div>}
                 <button onClick={start} disabled={loading||bet<10||bet>(user?.balance||0)}
@@ -158,34 +104,64 @@ export default function Mines(){
                   <div style={{fontSize:30,fontWeight:900,color:C.gold}}>×{mult}</div>
                   {revealed.length>0&&<div style={{fontSize:14,color:C.green,fontWeight:700,marginTop:2}}>{payout.toLocaleString()} jetons</div>}
                 </div>
-                <div style={{fontSize:11,color:C.muted,textAlign:'center',marginBottom:10}}>
-                  Mise : <span style={{color:C.gold,fontWeight:700}}>{bet.toLocaleString()}</span> · <span style={{color:C.red}}>{mines} 💣</span>
-                </div>
+                <div style={{textAlign:'center',fontSize:11,color:C.muted,marginBottom:10}}>Mise : <span style={{color:C.gold,fontWeight:700}}>{bet.toLocaleString()}</span> · <span style={{color:C.red}}>{mines} 💣</span></div>
                 <button onClick={cashout} disabled={!canCashout}
                   style={{width:'100%',padding:'14px',background:canCashout?'#0a2a0a':C.dim,color:canCashout?C.green:C.muted,border:`1px solid ${canCashout?C.green+'45':C.border}`,fontWeight:800,fontSize:14,borderRadius:10,cursor:canCashout?'pointer':'not-allowed',boxShadow:canCashout?`0 0 20px ${C.green}28`:'none',transition:'all .15s'}}>
-                  {revealed.length===0?'Retourne une case…':`💰 Encaisser ${payout.toLocaleString()} jetons`}
+                  {revealed.length===0?'Retourne une case…':`💰 Encaisser ${payout.toLocaleString()}`}
                 </button>
                 {err&&<div style={{marginTop:8,fontSize:11,color:C.red,background:`${C.red}10`,border:`1px solid ${C.red}25`,borderRadius:8,padding:'7px 10px'}}>⚠ {err}</div>}
               </>
             )}
           </div>
 
-          {/* Règles */}
-          <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Règles</div>
-            {[
-              {icon:'🪙',t:'Retourne des cases',d:'pour trouver des jetons'},
-              {icon:'💰',t:'Encaisse quand tu veux',d:'le gain est sécurisé'},
-              {icon:'💥',t:'Un Voltorbe touché',d:'= tout est perdu, 0 jetons'},
-              {icon:'📈',t:'Plus de mines',d:'= multiplicateurs plus élevés'},
-              {icon:'🏆',t:'Toutes les cases sûres',d:'= jackpot maximum'},
-            ].map(({icon,t,d})=>(
-              <div key={t} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'6px 0',borderBottom:`1px solid ${C.dim}`}}>
-                <span style={{fontSize:14,flexShrink:0}}>{icon}</span>
-                <div><div style={{fontSize:11,fontWeight:700,color:C.txt}}>{t}</div><div style={{fontSize:10,color:C.muted}}>{d}</div></div>
-              </div>
-            ))}
+          {done&&(
+            <div style={{background:phase==='exploded'?`${C.red}08`:`${C.green}0e`,border:`1px solid ${statusCol}25`,borderRadius:12,padding:14}}>
+              <div style={{fontSize:13,fontWeight:800,color:statusCol,marginBottom:4}}>{phase==='exploded'?'💥 Voltorbe !':phase==='won'?'🏆 Grille complète !':'✅ Encaissé !'}</div>
+              <div style={{fontSize:11,color:C.muted,marginBottom:6}}>{revealed.length} cases · {mines} mines</div>
+              <div style={{fontSize:22,fontWeight:900,color:statusCol}}>{phase==='exploded'?`−${bet.toLocaleString()}`:`+${(payout-bet).toLocaleString()}`}</div>
+              <div style={{fontSize:11,color:C.muted}}>jetons</div>
+            </div>
+          )}
+
+          {history.length>0&&(
+            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+              {history.map((h,i)=><div key={i} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,background:h.status==='exploded'?`${C.red}10`:`${C.green}12`,border:`1px solid ${h.status==='exploded'?C.red+'20':C.green+'28'}`,color:h.status==='exploded'?C.red:C.green}}>{h.status==='exploded'?'💥':`+${(h.payout-h.bet).toLocaleString()}`}</div>)}
+            </div>
+          )}
+        </div>
+
+        {/* CENTRE — Grille */}
+        <div style={{flex:1,background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
+          <div style={{textAlign:'center'}}><div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>MINES</div><div style={{fontSize:11,color:C.muted,marginTop:3}}>Grille 5×5 · Évite les Voltorbe · Encaisse quand tu veux</div></div>
+          {playing&&revealed.length>0&&(
+            <div style={{display:'flex',alignItems:'center',gap:16,padding:'10px 20px',background:`${C.gold}0a`,border:`1px solid ${C.gold}22`,borderRadius:12}}>
+              <div style={{fontSize:11,color:C.muted}}>{revealed.length} case{revealed.length>1?'s':''}</div>
+              <div style={{fontSize:22,fontWeight:900,color:C.gold}}>×{mult}</div>
+              <div style={{fontSize:16,fontWeight:700,color:C.green}}>{payout.toLocaleString()} jetons</div>
+            </div>
+          )}
+          <div style={{background:'#07070f',border:`1px solid ${C.border}`,borderRadius:16,padding:18}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5,62px)',gap:8,justifyContent:'center'}}>
+              {Array.from({length:25},(_,i)=><Cell key={i} i={i} state={cellState(i)} onClick={reveal} disabled={!playing||loading}/>)}
+            </div>
           </div>
+          {phase==='idle'&&<div style={{fontSize:12,color:C.muted}}>Configure ta mise et lance !</div>}
+          {history.length>0&&(
+            <div style={{display:'flex',gap:5,flexWrap:'wrap',justifyContent:'center'}}>
+              {history.map((h,i)=><div key={i} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,background:h.status==='exploded'?`${C.red}10`:`${C.green}12`,border:`1px solid ${h.status==='exploded'?C.red+'20':C.green+'28'}`,color:h.status==='exploded'?C.red:C.green}}>{h.status==='exploded'?'💥':`+${(h.payout-h.bet).toLocaleString()}`}</div>)}
+            </div>
+          )}
+        </div>
+
+        {/* DROITE — Règles */}
+        <div style={{width:220,flexShrink:0,background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>Règles</div>
+          {[{icon:'🪙',t:'Retourne des cases',d:'pour trouver des jetons'},{icon:'💰',t:'Encaisse quand tu veux',d:'le gain est sécurisé'},{icon:'💥',t:'Un Voltorbe touché',d:'= tout est perdu, 0 jetons'},{icon:'📈',t:'Plus de mines',d:'= multiplicateurs plus élevés'},{icon:'🏆',t:'Toutes les cases sûres',d:'= jackpot maximum'}].map(({icon,t,d})=>(
+            <div key={t} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'7px 0',borderBottom:`1px solid ${C.dim}`}}>
+              <span style={{fontSize:14,flexShrink:0}}>{icon}</span>
+              <div><div style={{fontSize:11,fontWeight:700,color:C.txt}}>{t}</div><div style={{fontSize:10,color:C.muted,marginTop:1}}>{d}</div></div>
+            </div>
+          ))}
         </div>
       </div>
       <LiveFeed/>

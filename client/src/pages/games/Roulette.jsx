@@ -15,9 +15,9 @@ const CATS=[
 const MAG={id:'magikarp',label:'Magicarpe',count:1,payout:0,color:'#f87171',emoji:'🐟'}
 const ALL=[...CATS,MAG],TOTAL=16,SLICE=(2*Math.PI)/TOTAL
 const SPRITE=dex=>`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`
-const CW=360,CH=360,CX=180,CY=180,RO=155,RI=46
+const CW=320,CH=320,CX=160,CY=160,RO=142,RI=44
 
-function buildWheel(){const bc=ALL.map(c=>Array.from({length:c.count},()=>c));const r=[];let rnd=0;while(r.length<TOTAL){for(const a of bc){if(rnd<a.length)r.push(a[rnd])}rnd++};return r.slice(0,TOTAL)}
+function buildWheel(){const bc=ALL.map(c=>Array.from({length:c.count},()=>c));const r=[];let rn=0;while(r.length<TOTAL){for(const a of bc){if(rn<a.length)r.push(a[rn])}rn++};return r.slice(0,TOTAL)}
 const WHEEL=buildWheel()
 
 function drawWheel(ctx,rot,winId,spinning,selId,magImg){
@@ -32,34 +32,31 @@ function drawWheel(ctx,rot,winId,spinning,selId,magImg){
     ctx.beginPath();ctx.moveTo(RI*Math.cos(a0),RI*Math.sin(a0));ctx.arc(0,0,RO,a0,a1);ctx.arc(0,0,RI,a1,a0,true);ctx.closePath()
     if(isW){ctx.shadowColor=seg.color;ctx.shadowBlur=22;ctx.fillStyle=seg.color}
     else if(isSel){ctx.shadowColor=seg.color;ctx.shadowBlur=10;ctx.fillStyle=seg.color+'cc'}
-    else if(isMag&&!spinning){ctx.shadowBlur=0;ctx.fillStyle=selId?'#18000818':'#280009'+'55'}
+    else if(isMag&&!spinning){ctx.shadowBlur=0;ctx.fillStyle=selId?'#18000815':'#28000955'}
     else if(spinning){ctx.shadowBlur=0;ctx.fillStyle=isMag?'#2a000a44':seg.color+'44'}
     else{ctx.shadowBlur=0;ctx.fillStyle=selId&&!isSel?seg.color+'14':seg.color+'80'}
     ctx.fill();ctx.strokeStyle='#04040d';ctx.lineWidth=1.5;ctx.stroke();ctx.shadowBlur=0
     const ma=a0+SLICE/2,tr=RO*.66+RI*.34,tx=tr*Math.cos(ma),ty=tr*Math.sin(ma)
     ctx.save();ctx.translate(tx,ty);ctx.rotate(ma+Math.PI/2);ctx.globalAlpha=selId&&!isSel&&!isMag?.15:isMag&&selId?.3:1
     if(isMag&&magImg){ctx.imageSmoothingEnabled=false;const sw=(RO-RI)*.8;ctx.drawImage(magImg,-sw/2,-sw/2,sw,sw)}
-    else{ctx.font=`${isW||isSel?26:20}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(seg.emoji,0,0)}
+    else{ctx.font=`${isW||isSel?24:19}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(seg.emoji,0,0)}
     ctx.globalAlpha=1;ctx.restore()
   }
   ctx.restore()
   const hg=ctx.createRadialGradient(CX-8,CY-8,2,CX,CY,RI);hg.addColorStop(0,'#28284a');hg.addColorStop(1,'#06060f')
   ctx.beginPath();ctx.arc(CX,CY,RI,0,Math.PI*2);ctx.fillStyle=hg;ctx.fill();ctx.strokeStyle=C.gold;ctx.lineWidth=3;ctx.stroke()
   const wc=winId?ALL.find(c=>c.id===winId):null
-  ctx.font='20px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(spinning?'🌀':wc?wc.emoji:'🎡',CX,CY)
+  ctx.font='19px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(spinning?'🌀':wc?wc.emoji:'🎡',CX,CY)
 }
 
 function Wheel({selId,winId,winIdx,spinning}){
   const cv=useRef(null),rot=useRef(0),raf=useRef(null),ph=useRef('idle'),mag=useRef(null)
-  useEffect(()=>{
-    const img=new Image();img.crossOrigin='anonymous';img.src=SPRITE(129)
-    img.onload=()=>{mag.current=img;if(cv.current&&ph.current==='idle')drawWheel(cv.current.getContext('2d'),rot.current,null,false,null,img)}
-  },[])
+  useEffect(()=>{const img=new Image();img.crossOrigin='anonymous';img.src=SPRITE(129);img.onload=()=>{mag.current=img;if(cv.current&&ph.current==='idle')drawWheel(cv.current.getContext('2d'),rot.current,null,false,null,img)}},[])
   useEffect(()=>{if(cv.current)drawWheel(cv.current.getContext('2d'),0,null,false,null,mag.current)},[])
   useEffect(()=>{if(!spinning&&!winId){if(cv.current)drawWheel(cv.current.getContext('2d'),rot.current,null,false,selId,mag.current)}},[selId,spinning,winId])
   useEffect(()=>{
     if(!spinning)return;ph.current='spinning';const t0=performance.now()
-    const lp=now=>{if(ph.current!=='spinning')return;const sp=Math.min(.28,.05+(now-t0)/2500*.23);rot.current+=sp;if(cv.current)drawWheel(cv.current.getContext('2d'),rot.current,null,true,null,mag.current);raf.current=requestAnimationFrame(lp)}
+    const lp=now=>{if(ph.current!=='spinning')return;const sp=Math.min(.28,.05+(now-t0)/2500*.22);rot.current+=sp;if(cv.current)drawWheel(cv.current.getContext('2d'),rot.current,null,true,null,mag.current);raf.current=requestAnimationFrame(lp)}
     raf.current=requestAnimationFrame(lp);return()=>{cancelAnimationFrame(raf.current);ph.current='idle'}
   },[spinning])
   useEffect(()=>{
@@ -73,7 +70,7 @@ function Wheel({selId,winId,winIdx,spinning}){
   },[winId,spinning])
   return(
     <div style={{position:'relative',width:CW,margin:'0 auto'}}>
-      <div style={{position:'absolute',top:CY-RO-18,left:'50%',transform:'translateX(-50%)',zIndex:10,filter:`drop-shadow(0 0 8px ${C.gold})`}}>
+      <div style={{position:'absolute',top:CY-RO-16,left:'50%',transform:'translateX(-50%)',zIndex:10,filter:`drop-shadow(0 0 8px ${C.gold})`}}>
         <svg width="20" height="24" viewBox="0 0 20 24"><polygon points="10,22 1,2 19,2" fill={C.gold} stroke="#fff3" strokeWidth="1.5"/></svg>
       </div>
       <canvas ref={cv} width={CW} height={CH} style={{width:'100%',display:'block'}}/>
@@ -111,120 +108,121 @@ export default function Roulette(){
         <span style={{fontSize:13,color:C.gold,fontWeight:700}}>🎡 Roulette Pokémon</span>
       </div>
 
-      <div style={{display:'flex',gap:12,alignItems:'start'}}>
+      <div style={{display:'flex',gap:12,alignItems:'start',flex:1}}>
 
-        {/* Roue */}
-        <div style={{order:1,flex:1,background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
-          <div style={{textAlign:'center'}}>
-            <div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>ROULETTE POKÉMON</div>
-            <div style={{fontSize:11,color:C.muted,marginTop:3}}>16 segments · <span style={{color:C.red}}>🐟 Magicarpe = perte totale</span></div>
+        {/* GAUCHE — Contrôles + Catégories */}
+        <div style={{width:220,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
+          <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
+            <BetInput bet={bet} setBet={setBet} disabled={inProg}/>
+            {err&&<div style={{marginTop:8,fontSize:11,color:C.red,background:`${C.red}10`,border:`1px solid ${C.red}25`,borderRadius:8,padding:'7px 10px'}}>⚠ {err}</div>}
+            <button onClick={spin} disabled={inProg||!sel||bet<10||bet>(user?.balance??0)}
+              style={{width:'100%',marginTop:12,padding:'14px',background:inProg?C.dim:!sel?C.dim:C.gold,color:inProg||!sel?C.muted:'#06060f',fontWeight:800,fontSize:16,borderRadius:10,border:'none',cursor:inProg||!sel?'not-allowed':'pointer',opacity:!sel?.6:bet>(user?.balance??0)?.5:1,boxShadow:inProg||!sel?'none':`0 0 20px ${C.gold}44`,transition:'all .15s'}}>
+              {inProg?'En cours…':!sel?'Choisis ↓':'🎡 Miser'}
+            </button>
           </div>
-          <Wheel selId={sel} winId={winId} winIdx={winIdx} spinning={spinning}/>
 
-          {/* Pari actif */}
-          {selCat&&!spinning&&!winId&&(
-            <div style={{padding:'8px 16px',background:selCat.color+'10',border:`1px solid ${selCat.color}28`,borderRadius:10,fontSize:12,color:C.muted}}>
-              Tu mises sur <span style={{color:selCat.color,fontWeight:700}}>{selCat.emoji} {selCat.label}</span> · {selCat.count}/16 segments · victoire = <span style={{color:selCat.color,fontWeight:700}}>×{selCat.payout}</span>
+          {show&&result&&(
+            <div style={{background:isMag?`${C.red}08`:isWin?`${C.green}0e`:`${C.red}08`,border:`1px solid ${isMag?C.red+'25':isWin?C.green+'28':C.red+'18'}`,borderRadius:12,padding:14}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                {wCat&&<img src={SPRITE(wCat.id==='magikarp'?129:wCat.pokemons?.[0]?.dex??151)} alt="" style={{width:32,height:32,imageRendering:'pixelated',filter:isMag?'brightness(.5) sepia(1)':`drop-shadow(0 0 8px ${wCat.color})`}}/>}
+                <div><div style={{fontSize:12,fontWeight:800,color:isMag?C.red:wCat?.color}}>{wCat?.emoji} {wCat?.label}</div><div style={{fontSize:10,color:C.muted}}>Segment tombé</div></div>
+              </div>
+              <div style={{fontSize:22,fontWeight:900,color:isMag?C.red:isWin?C.green:C.red}}>{isMag||!isWin?`−${bet.toLocaleString()}`:`+${result.payout.toLocaleString()}`}</div>
+              {isWin&&!isMag&&<div style={{fontSize:11,color:C.muted}}>jetons · ×{result.multiplier}</div>}
+              {(!isWin||isMag)&&<div style={{fontSize:11,color:C.muted}}>jetons</div>}
             </div>
           )}
 
-          {/* Animation attente */}
+          {/* Catégories */}
+          <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Catégories</div>
+            <div style={{display:'flex',flexDirection:'column',gap:5}}>
+              {CATS.map(cat=>{
+                const isSel=sel===cat.id
+                return(
+                  <div key={cat.id} onClick={()=>!inProg&&pick(cat.id)}
+                    style={{background:isSel?cat.color+'18':'#07071a',border:`2px solid ${isSel?cat.color:C.border}`,borderRadius:9,padding:'7px 10px',cursor:inProg?'not-allowed':'pointer',transition:'all .15s',boxShadow:isSel?`0 0 10px ${cat.color}25`:'none'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                      <div style={{display:'flex',alignItems:'center',gap:5}}>
+                        <span style={{fontSize:14}}>{cat.emoji}</span>
+                        <div>
+                          <div style={{fontSize:11,fontWeight:800,color:isSel?cat.color:C.txt}}>{cat.label}</div>
+                          <div style={{fontSize:9,color:C.muted}}>{cat.count}/16 · {Math.round(cat.count/16*100)}%</div>
+                        </div>
+                      </div>
+                      <div style={{fontSize:13,fontWeight:900,color:isSel?'#000':cat.color,background:isSel?cat.color:'transparent',padding:'1px 8px',borderRadius:14,border:`1px solid ${cat.color}${isSel?'':'45'}`,fontFamily:'monospace',transition:'all .15s',flexShrink:0}}>×{cat.payout}</div>
+                    </div>
+                    <div style={{display:'flex',gap:2}}>
+                      {cat.pokemons.map(p=><img key={p.dex} src={SPRITE(p.dex)} alt="" style={{width:20,height:20,imageRendering:'pixelated',filter:isSel?`drop-shadow(0 0 4px ${cat.color}) brightness(1.1)`:'brightness(.5)',transition:'filter .15s'}}/>)}
+                    </div>
+                  </div>
+                )
+              })}
+              <div style={{background:'#0a0005',border:`1px solid ${C.red}28`,borderRadius:9,padding:'7px 10px',opacity:.65}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:5}}>
+                    <span style={{fontSize:14}}>🐟</span>
+                    <div><div style={{fontSize:11,fontWeight:800,color:C.red}}>Magicarpe <span style={{fontSize:8,background:`${C.red}22`,padding:'1px 5px',borderRadius:4}}>PIÈGE</span></div><div style={{fontSize:9,color:C.muted}}>1/16 · Non pariable</div></div>
+                  </div>
+                  <div style={{fontSize:12,color:C.red+'55',fontWeight:900,fontFamily:'monospace'}}>×0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {history.length>0&&(
+            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+              {history.map(h=>{const cat=ALL.find(c=>c.id===h.cat.id);return<div key={h.id} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,display:'flex',alignItems:'center',gap:3,background:h.cat.id==='magikarp'?`${C.red}10`:h.win?`${C.green}12`:`${C.red}08`,border:`1px solid ${h.cat.id==='magikarp'?C.red+'20':h.win?C.green+'25':C.red+'15'}`,color:h.cat.id==='magikarp'?C.red:h.win?C.green:C.muted}}><span style={{fontSize:10}}>{cat?.emoji}</span>{h.pnl>=0?'+':''}{h.pnl.toLocaleString()}</div>})}
+            </div>
+          )}
+        </div>
+
+        {/* CENTRE — Roue */}
+        <div style={{flex:1,background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
+          <div style={{textAlign:'center'}}><div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>ROULETTE POKÉMON</div><div style={{fontSize:11,color:C.muted,marginTop:3}}>16 segments · <span style={{color:C.red}}>🐟 Magicarpe = perte</span></div></div>
+          <Wheel selId={sel} winId={winId} winIdx={winIdx} spinning={spinning}/>
+          {selCat&&!spinning&&!winId&&(
+            <div style={{padding:'8px 16px',background:selCat.color+'10',border:`1px solid ${selCat.color}25`,borderRadius:10,fontSize:12,color:C.muted}}>
+              Tu mises sur <span style={{color:selCat.color,fontWeight:700}}>{selCat.emoji} {selCat.label}</span> · victoire = <span style={{color:selCat.color,fontWeight:700}}>×{selCat.payout}</span>
+            </div>
+          )}
           {inProg&&(
             <div style={{display:'flex',alignItems:'center',gap:8}}>
               {[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:'50%',background:C.gold,animation:`db .7s ease-in-out ${i*.15}s infinite alternate`}}/>)}
               <span style={{color:C.muted,fontSize:12}}>{spinning?'La roue tourne…':'Arrêt en cours…'}</span>
             </div>
           )}
-
-          {/* Résultat */}
-          {show&&result&&(
-            <div style={{width:'100%',maxWidth:380,padding:'12px 20px',background:isMag?`${C.red}08`:isWin?`${C.green}0e`:`${C.red}08`,border:`1px solid ${isMag?C.red+'25':isWin?C.green+'28':C.red+'18'}`,borderRadius:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div style={{display:'flex',alignItems:'center',gap:10}}>
-                {wCat&&<img src={SPRITE(wCat.id==='magikarp'?129:wCat.pokemons?.[0]?.dex??151)} alt="" style={{width:38,height:38,imageRendering:'pixelated',filter:isMag?'brightness(.5) sepia(1)':`drop-shadow(0 0 8px ${wCat.color})`}}/>}
-                <div>
-                  <div style={{fontSize:12,fontWeight:800,color:isMag?C.red:wCat?.color}}>{wCat?.emoji} {wCat?.label}</div>
-                  <div style={{fontSize:10,color:C.muted}}>Segment tombé</div>
-                </div>
-              </div>
-              <div style={{textAlign:'right'}}>
-                <div style={{fontSize:24,fontWeight:900,color:isMag?C.red:isWin?C.green:C.red}}>{isMag||!isWin?`−${bet.toLocaleString()}`:`+${result.payout.toLocaleString()}`}</div>
-                {isWin&&!isMag&&<div style={{fontSize:11,color:C.muted}}>jetons · ×{result.multiplier}</div>}
-                {!isWin&&<div style={{fontSize:11,color:C.muted}}>jetons</div>}
-              </div>
-            </div>
-          )}
-
-          {/* Pills historique */}
-          {history.length>0&&(
-            <div style={{display:'flex',gap:6,flexWrap:'wrap',justifyContent:'center'}}>
-              {history.map(h=>{
-                const cat=ALL.find(c=>c.id===h.cat.id)
-                return<div key={h.id} style={{fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:20,display:'flex',alignItems:'center',gap:4,background:h.cat.id==='magikarp'?`${C.red}10`:h.win?`${C.green}12`:`${C.red}08`,border:`1px solid ${h.cat.id==='magikarp'?C.red+'25':h.win?C.green+'28':C.red+'18'}`,color:h.cat.id==='magikarp'?C.red:h.win?C.green:C.muted}}>
-                  <span style={{fontSize:10}}>{cat?.emoji}</span>{h.pnl>=0?'+':''}{h.pnl.toLocaleString()}
-                </div>
-              })}
-            </div>
-          )}
         </div>
 
-        {/* Panneau droite */}
-        <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
-          {/* Mise + spin */}
-          <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
-            <BetInput bet={bet} setBet={setBet} disabled={inProg}/>
-            {err&&<div style={{marginTop:8,fontSize:11,color:C.red,background:`${C.red}10`,border:`1px solid ${C.red}25`,borderRadius:8,padding:'7px 10px'}}>⚠ {err}</div>}
-            <button onClick={spin} disabled={inProg||!sel||bet<10||bet>(user?.balance??0)}
-              style={{width:'100%',marginTop:12,padding:'14px',background:inProg?C.dim:!sel?C.dim:C.gold,color:inProg||!sel?C.muted:'#06060f',fontWeight:800,fontSize:16,borderRadius:10,border:'none',cursor:inProg||!sel?'not-allowed':'pointer',opacity:!sel?.6:bet>(user?.balance??0)?.5:1,boxShadow:inProg||!sel?'none':`0 0 20px ${C.gold}44`,transition:'all .15s'}}>
-              {inProg?'En cours…':!sel?'← Choisis une catégorie':`🎡 Miser sur ${selCat?.emoji} ${selCat?.label}`}
-            </button>
-          </div>
-
-          {/* Catégories */}
-          <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Catégories</div>
-            <div style={{display:'flex',flexDirection:'column',gap:6}}>
-              {CATS.map(cat=>{
-                const isSel=sel===cat.id
-                return(
-                  <div key={cat.id} onClick={()=>!inProg&&pick(cat.id)}
-                    style={{background:isSel?cat.color+'18':'#07071a',border:`2px solid ${isSel?cat.color:C.border}`,borderRadius:10,padding:'8px 10px',cursor:inProg?'not-allowed':'pointer',transition:'all .15s',boxShadow:isSel?`0 0 10px ${cat.color}28`:'none'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
-                      <div style={{display:'flex',alignItems:'center',gap:6}}>
-                        <span style={{fontSize:15}}>{cat.emoji}</span>
-                        <div>
-                          <div style={{fontSize:12,fontWeight:800,color:isSel?cat.color:C.txt}}>{cat.label}</div>
-                          <div style={{fontSize:9,color:C.muted}}>{cat.count}/16 · {Math.round(cat.count/16*100)}% de chance</div>
-                        </div>
-                      </div>
-                      <div style={{fontSize:14,fontWeight:900,color:isSel?'#000':cat.color,background:isSel?cat.color:'transparent',padding:'2px 10px',borderRadius:16,border:`1px solid ${cat.color}${isSel?'':'45'}`,fontFamily:'monospace',transition:'all .15s',flexShrink:0}}>×{cat.payout}</div>
-                    </div>
-                    {/* Sprites Pokémon */}
-                    <div style={{display:'flex',gap:3}}>
-                      {cat.pokemons.map(p=><img key={p.dex} src={SPRITE(p.dex)} alt="" style={{width:22,height:22,imageRendering:'pixelated',filter:isSel?`drop-shadow(0 0 4px ${cat.color}) brightness(1.1)`:'brightness(.5)',transition:'filter .15s'}}/>)}
-                    </div>
-                  </div>
-                )
-              })}
-              {/* Magicarpe */}
-              <div style={{background:'#0a0005',border:`1px solid ${C.red}28`,borderRadius:10,padding:'8px 10px',opacity:.65}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:6}}>
-                    <span style={{fontSize:15}}>🐟</span>
-                    <div>
-                      <div style={{fontSize:12,fontWeight:800,color:C.red,display:'flex',alignItems:'center',gap:5}}>Magicarpe<span style={{fontSize:8,background:`${C.red}22`,padding:'1px 5px',borderRadius:4,fontWeight:700}}>PIÈGE</span></div>
-                      <div style={{fontSize:9,color:C.muted}}>1/16 · Non pariable · Fait perdre</div>
-                    </div>
-                  </div>
-                  <div style={{fontSize:13,color:C.red+'55',fontWeight:900,fontFamily:'monospace'}}>×0 💀</div>
-                </div>
+        {/* DROITE — Règles */}
+        <div style={{width:220,flexShrink:0,background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>Gains</div>
+          {CATS.map(cat=>(
+            <div key={cat.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 0',borderBottom:`1px solid ${C.dim}`}}>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <span style={{fontSize:14}}>{cat.emoji}</span>
+                <div><div style={{fontSize:11,fontWeight:700,color:cat.color}}>{cat.label}</div><div style={{fontSize:9,color:C.muted}}>{cat.count}/16 · {Math.round(cat.count/16*100)}% chance</div></div>
               </div>
+              <div style={{fontSize:14,fontWeight:900,color:cat.color,fontFamily:'monospace'}}>×{cat.payout}</div>
             </div>
+          ))}
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 0',marginBottom:10}}>
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <span style={{fontSize:14}}>🐟</span>
+              <div><div style={{fontSize:11,fontWeight:700,color:C.red}}>Magicarpe</div><div style={{fontSize:9,color:C.muted}}>1/16 · Segment piège</div></div>
+            </div>
+            <div style={{fontSize:12,color:C.red+'70',fontWeight:900}}>PERTE</div>
+          </div>
+          <div style={{paddingTop:8,borderTop:`1px solid ${C.dim}`,fontSize:10,color:C.muted,lineHeight:1.9}}>
+            <div>🎯 Mise sur une catégorie</div>
+            <div>🐟 Magicarpe = perte totale</div>
+            <div>🎲 Résultat équitable côté serveur</div>
           </div>
         </div>
       </div>
 
       <LiveFeed/>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}};@keyframes db{from{transform:translateY(0);opacity:.4}to{transform:translateY(-5px);opacity:1}}`}</style>
+      <style>{`@keyframes db{from{transform:translateY(0);opacity:.4}to{transform:translateY(-5px);opacity:1}}`}</style>
     </div>
   )
 }
