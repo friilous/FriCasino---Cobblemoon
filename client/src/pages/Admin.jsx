@@ -37,6 +37,7 @@ export default function Admin() {
   // ── NextLeg ──
   const [nextlegUsers,   setNextlegUsers]   = useState([])
   const [nextlegLoading, setNextlegLoading] = useState(false)
+  const [, setTick] = useState(0) // force re-render pour timeSince
 
   const { liveFeed, socket } = useSocket()
 
@@ -50,6 +51,20 @@ export default function Admin() {
 
   useEffect(() => {
     if (tab === 'nextleg') loadNextlegUsers()
+  }, [tab])
+
+  // Polling toutes les 20s sur l'onglet NextLeg (fallback si socket pas dispo)
+  useEffect(() => {
+    if (tab !== 'nextleg') return
+    const interval = setInterval(() => loadNextlegUsers(), 20000)
+    return () => clearInterval(interval)
+  }, [tab])
+
+  // Rafraîchit "Dernière vue" toutes les 30s
+  useEffect(() => {
+    if (tab !== 'nextleg') return
+    const interval = setInterval(() => setTick(t => t + 1), 30000)
+    return () => clearInterval(interval)
   }, [tab])
 
   async function loadAll() {
@@ -118,21 +133,17 @@ export default function Admin() {
     if (!socket) return
     socket.on('new_withdrawal', () => { loadWithdrawals() })
     socket.on('nextleg_ping', (updatedUser) => {
-      // Met à jour la liste en temps réel sans recharger toute la page
       setNextlegUsers(prev => {
         const exists = prev.find(u => u.uid === updatedUser.uid)
-        if (exists) {
-          // Update l'entrée existante
-          return prev.map(u => u.uid === updatedUser.uid ? updatedUser : u)
-        } else {
-          // Nouvel utilisateur : l'ajouter en tête
-          return [updatedUser, ...prev]
-        }
+        if (exists) return prev.map(u => u.uid === updatedUser.uid ? updatedUser : u)
+        return [updatedUser, ...prev]
       })
     })
+    socket.on('nextleg_new_user', () => loadNextlegUsers())
     return () => {
       socket.off('new_withdrawal')
       socket.off('nextleg_ping')
+      socket.off('nextleg_new_user')
     }
   }, [socket])
 
@@ -728,12 +739,18 @@ function NextlegTab({ users, loading, onRefresh }) {
 
   function timeSince(dateStr) {
     if (!dateStr) return '—'
-    const diff = Date.now() - new Date(dateStr).getTime()
+    // Ajoute 'Z' si pas de timezone pour forcer UTC → heure locale correcte
+    const normalized = dateStr.includes('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
+    const date = new Date(normalized)
+    const diff = Date.now() - date.getTime()
     const m = Math.floor(diff / 60000)
     if (m < 1)  return 'À l\'instant'
     if (m < 60) return `${m}min`
     const h = Math.floor(m / 60)
-    if (h < 24) return `${h}h`
+    if (h < 24) {
+      // Affiche l'heure exacte si aujourd'hui
+      return date.toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' })
+    }
     return `${Math.floor(h / 24)}j`
   }
 
