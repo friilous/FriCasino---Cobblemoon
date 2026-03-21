@@ -30,16 +30,16 @@ const SYMBOLS = {
 }
 
 const PAYOUTS_TABLE = [
-  { id: 'mew',        p3: 'Wild', p2: 'Wild' },
-  { id: 'masterball', p3: '×256', p2: '×26'  },
-  { id: 'dragon',     p3: '×103', p2: '×10'  },
-  { id: 'dark',       p3: '×51',  p2: '×6.4' },
-  { id: 'psychic',    p3: '×26',  p2: '×3.8' },
-  { id: 'electric',   p3: '×13',  p2: '×2.6' },
-  { id: 'fire',       p3: '×6',   p2: '×1.9' },
-  { id: 'water',      p3: '×6',   p2: '×1.9' },
-  { id: 'grass',      p3: '×6',   p2: '×1.9' },
-  { id: 'magikarp',   p3: '×1',   p2: '—'    },
+  { id: 'mew',        p3: 'Wild', p2: 'Wild'  },
+  { id: 'masterball', p3: '×190', p2: '×19'   },
+  { id: 'dragon',     p3: '×76',  p2: '×7.5'  },
+  { id: 'dark',       p3: '×38',  p2: '×4.8'  },
+  { id: 'psychic',    p3: '×19',  p2: '×2.8'  },
+  { id: 'electric',   p3: '×10',  p2: '×1.9'  },
+  { id: 'fire',       p3: '×4.5', p2: '×1.4'  },
+  { id: 'water',      p3: '×4.5', p2: '×1.4'  },
+  { id: 'grass',      p3: '×4.5', p2: '×1.4'  },
+  { id: 'magikarp',   p3: '×0.5', p2: '—'     },
 ]
 
 const SYMBOL_IDS = Object.keys(SYMBOLS)
@@ -308,7 +308,7 @@ export default function Slots() {
           <Link to="/casino" className="text-gray-500 hover:text-white text-sm transition-colors">← Lobby</Link>
           <span className="text-gray-700">/</span>
           <span className="text-casino-gold font-semibold">🎰 Slot Machine</span>
-          <span className="badge-gold ml-auto">RTP 93%</span>
+          <span className="badge-gold ml-auto">RTP 88%</span>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">

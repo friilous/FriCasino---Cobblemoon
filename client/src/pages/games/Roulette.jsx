@@ -8,7 +8,7 @@ import LiveFeed from '../../components/LiveFeed'
 // ── Config (miroir de roulette.js) ────────────────────────────────────────────
 const CATEGORIES = [
   {
-    id: 'common', label: 'Commun', count: 6, payout: 2.5,
+    id: 'common', label: 'Commun', count: 6, payout: 2.4,
     color: '#78c850', emoji: '⭐',
     desc: 'Normal · Eau · Plante · Sol · Vol',
     pokemons: [
@@ -20,7 +20,7 @@ const CATEGORIES = [
     ],
   },
   {
-    id: 'rare', label: 'Rare', count: 5, payout: 3,
+    id: 'rare', label: 'Rare', count: 5, payout: 2.8,
     color: '#6890f0', emoji: '💙',
     desc: 'Feu · Électrik · Glace · Roche · Insecte',
     pokemons: [
@@ -32,7 +32,7 @@ const CATEGORIES = [
     ],
   },
   {
-    id: 'epic', label: 'Épique', count: 3, payout: 5,
+    id: 'epic', label: 'Épique', count: 3, payout: 4.7,
     color: '#f85888', emoji: '💜',
     desc: 'Combat · Poison · Psy',
     pokemons: [

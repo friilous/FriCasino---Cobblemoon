@@ -1,13 +1,12 @@
 // ── Roulette Pokémon ──────────────────────────────────────────────────────────
-// 16 segments · 4 catégories + Magicarpe · RTP ~91% (réduit depuis 93.8%)
+// 16 segments · 4 catégories + Magicarpe · RTP ~89%
 //
-// Technique casino : réduction des multiplicateurs
 // Catégorie   | Segments | Prob   | Payout | RTP
 // Commun      |  6 / 16  | 37.5%  |  ×2.4  | 90%
-// Rare        |  5 / 16  | 31.3%  |  ×2.9  | 90.6%
-// Épique      |  3 / 16  | 18.8%  |  ×4.8  | 90%
-// Légendaire  |  1 / 16  |  6.3%  |  ×14.4 | 90%
-// Magicarpe   |  1 / 16  |  6.3%  |  ×0    | 0% (segment neutre, non pariable)
+// Rare        |  5 / 16  | 31.3%  |  ×2.8  | 87.5%
+// Épique      |  3 / 16  | 18.8%  |  ×4.7  | 88.1%
+// Légendaire  |  1 / 16  |  6.3%  |  ×14.0 | 87.5%
+// Magicarpe   |  1 / 16  |  6.3%  |  ×0    | 0% (segment piège, non pariable)
 
 const CATEGORIES = [
   {
@@ -30,7 +29,7 @@ const CATEGORIES = [
     id:      'rare',
     label:   'Rare',
     count:   5,
-    payout:  2.9,
+    payout:  2.8,
     color:   '#6890f0',
     emoji:   '💙',
     desc:    'Feu · Électrik · Glace · Roche · Insecte',
@@ -46,7 +45,7 @@ const CATEGORIES = [
     id:      'epic',
     label:   'Épique',
     count:   3,
-    payout:  4.8,
+    payout:  4.7,
     color:   '#f85888',
     emoji:   '💜',
     desc:    'Combat · Poison · Psy',
@@ -60,7 +59,7 @@ const CATEGORIES = [
     id:      'legendary',
     label:   'Légendaire',
     count:   1,
-    payout:  14.4,
+    payout:  14.0,
     color:   '#f0b429',
     emoji:   '✨',
     desc:    'Mew uniquement',

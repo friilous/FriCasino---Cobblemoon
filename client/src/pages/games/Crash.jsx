@@ -281,7 +281,7 @@ export default function Crash() {
           background: 'rgba(240,192,64,0.1)', color: '#f0c040',
           border: '1px solid rgba(240,192,64,0.2)',
         }}>
-          RTP 94%
+          RTP ~89%
         </span>
       </div>
 

@@ -22,11 +22,11 @@ const GRAVITY     = 0.35
 const RESTITUTION = 0.38
 const FRICTION    = 0.993
 
-// ── Multiplicateurs MIS À JOUR (RTP ~91%) ────────────────────────────────────
+// ── Multiplicateurs MIS À JOUR (RTP ~90%) ────────────────────────────────────
 const MULTIPLIERS = {
-  low:    [4.5, 2.2, 1.1, 0.7, 0.4, 0.7, 1.1, 2.2, 4.5],
-  medium: [9.0, 3.5, 1.3, 0.4, 0.2, 0.4, 1.3, 3.5, 9.0],
-  high:   [27.0, 4.0, 1.0, 0.2, 0.1, 0.2, 1.0, 4.0, 27.0],
+  low:    [5.0, 2.5, 1.2, 0.7, 0.5, 0.7, 1.2, 2.5, 5.0],
+  medium: [9.0, 3.9, 1.5, 0.4, 0.3, 0.4, 1.5, 3.9, 9.0],
+  high:   [31.0, 4.5, 1.2, 0.2, 0.1, 0.2, 1.2, 4.5, 31.0],
 }
 
 const BUCKET_TYPES  = ['Dragon','Psy','Électrik','Feu','Normal','Feu','Électrik','Psy','Dragon']
@@ -251,7 +251,7 @@ export default function Plinko() {
           <Link to="/machines" className="text-gray-500 hover:text-white text-sm transition-colors">← Machines</Link>
           <span className="text-gray-700">/</span>
           <span className="text-casino-gold font-semibold">⚪ Plinko</span>
-          <span className="badge-gold ml-auto">RTP ~91%</span>
+          <span className="badge-gold ml-auto">RTP ~90%</span>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">

@@ -261,7 +261,7 @@ export default function Mines() {
           marginLeft: 'auto', fontSize: 9, padding: '2px 8px', borderRadius: 8,
           background: 'rgba(240,192,64,0.1)', color: '#f0c040',
           border: '1px solid rgba(240,192,64,0.2)',
-        }}>RTP 94%</span>
+        }}>RTP 92%</span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 16 }}>
@@ -409,7 +409,7 @@ export default function Mines() {
                 }}>
                   <span>1ère case safe</span>
                   <span style={{ color: '#f0c040', fontWeight: 700 }}>
-                    ×{(0.94 * (25 / (25 - minesCount))).toFixed(2)}
+                    ×{(0.92 * (25 / (25 - minesCount))).toFixed(2)}
                   </span>
                 </div>
 
