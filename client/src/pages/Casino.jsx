@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
 
@@ -43,6 +45,14 @@ const RULES = [
 export default function Casino() {
   const { user } = useAuth()
   const { liveFeed, gameSettings } = useSocket()
+  const [bonusAvailable, setBonusAvailable] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    axios.get('/api/wheel')
+      .then(r => setBonusAvailable(r.data.can_spin))
+      .catch(() => {})
+  }, [user])
 
   const activeGames = Object.entries(gameSettings).filter(([, v]) => v).length
   const totalGames  = Object.keys(gameSettings).length
@@ -59,6 +69,50 @@ export default function Casino() {
           Casino indépendant pour le serveur Minecraft <span style={{ color: '#9898b8' }}>CobbleMoon</span>
         </p>
       </div>
+
+      {/* Bonus du jour disponible */}
+      {bonusAvailable && (
+        <Link to="/roue-du-jour" style={{ textDecoration: 'none', display: 'block', marginBottom: 16 }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #1a1200, #0f0f28)',
+            border: '1px solid #f0c04050',
+            borderRadius: 12, padding: '14px 20px',
+            display: 'flex', alignItems: 'center', gap: 14,
+            cursor: 'pointer', transition: 'all .2s',
+            boxShadow: '0 0 20px rgba(240,192,64,0.08)',
+            animation: 'pulse-border 2s ease-in-out infinite',
+          }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = '#f0c04099'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = '#f0c04050'}
+          >
+            <div style={{
+              width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+              background: 'linear-gradient(135deg, #f0c04025, #f0c04010)',
+              border: '1px solid #f0c04040',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 22, animation: 'float 2.5s ease-in-out infinite',
+            }}>
+              🎁
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#f0c040', marginBottom: 2 }}>
+                Ton bonus du jour est disponible !
+              </div>
+              <div style={{ fontSize: 11, color: '#5a5a8a' }}>
+                Récupère jusqu'à <span style={{ color: '#ffd700', fontWeight: 700 }}>10 000 jetons</span> gratuitement (ou plus...) — offre valable jusqu'à minuit
+              </div>
+            </div>
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: '#07071a',
+              background: '#f0c040', borderRadius: 8, padding: '7px 16px', flexShrink: 0,
+              boxShadow: '0 0 12px #f0c04060',
+            }}>
+              Récupérer →
+            </div>
+          </div>
+          <style>{`@keyframes pulse-border { 0%,100%{box-shadow:0 0 20px rgba(240,192,64,0.08)} 50%{box-shadow:0 0 30px rgba(240,192,64,0.18)} }`}</style>
+        </Link>
+      )}
 
       {/* Bannière statut */}
       <div style={{

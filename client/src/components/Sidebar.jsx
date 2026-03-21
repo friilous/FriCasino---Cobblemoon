@@ -73,7 +73,7 @@ export default function Sidebar() {
 
         <NavSection label="Bonus" />
         <NavItem path="/superjackpot" icon="💎" label="SuperJackpot" active={isActive('/superjackpot')} />
-        <NavItem path="/roue-du-jour" icon="🎁" label="Caisse du jour" active={isActive('/roue-du-jour')} />
+        <NavItem path="/roue-du-jour" icon="🎁" label="Bonus du jour" active={isActive('/roue-du-jour')} />
 
         <NavSection label="Compte" />
         <NavItem path="/profil" icon="👤" label="Profil & Stats" active={isActive('/profil')} />

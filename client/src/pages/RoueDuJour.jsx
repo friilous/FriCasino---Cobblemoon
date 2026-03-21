@@ -167,7 +167,7 @@ export default function RoueDuJour() {
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:20 }}>
         <Link to="/casino" style={{ fontSize:11, color:C.muted, textDecoration:'none' }}>← Accueil</Link>
         <span style={{ color:C.dim }}>/</span>
-        <span style={{ fontSize:11, color:'#9898b8' }}>🎁 Caisse du jour</span>
+        <span style={{ fontSize:11, color:'#9898b8' }}>🎁 Bonus du jour</span>
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 280px', gap:16, maxWidth:920 }}>
@@ -179,7 +179,7 @@ export default function RoueDuJour() {
             {/* Titre */}
             <div style={{ textAlign:'center', marginBottom:22 }}>
               <div style={{ fontSize:24, fontWeight:900, color:C.gold, letterSpacing:3, textShadow:`0 0 20px ${C.gold}60` }}>
-                CAISSE DU JOUR
+                BONUS DU JOUR
               </div>
               <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>
                 Une ouverture <span style={{ color:C.txt, fontWeight:700 }}>gratuite</span> toutes les 24h · min{' '}
@@ -284,7 +284,7 @@ export default function RoueDuJour() {
               {!user ? 'Connecte-toi pour jouer'
                 : spinning ? '⏳ Ouverture en cours…'
                 : !status?.can_spin ? `⏰ Reviens dans ${countdown}`
-                : '🎁 Ouvrir la caisse du jour !'}
+                : '🎁 Récupérer mon bonus du jour !'}
             </button>
             {err && <div style={{ textAlign:'center', marginTop:10, fontSize:11, color:'#ef4444' }}>⚠ {err}</div>}
           </div>
@@ -321,9 +321,6 @@ export default function RoueDuJour() {
               { label:'5 000 jetons',    color:'#a855f7', rarity:'Épique' },
               { label:'10 000 jetons',   color:'#ff4444', rarity:'Légendaire' },
               { label:'❓ Mystère',      color:'#ffd700', rarity:'Mystère ✨' },
-              { label:'  → 20 000',      color:'#f0b429', rarity:'Rare' },
-              { label:'  → 30 000',      color:'#a855f7', rarity:'Très rare' },
-              { label:'  → 50 000',      color:'#ff4444', rarity:'Ultra rare 🌟' },
             ].map((seg, i) => (
               <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'5px 0', borderBottom:`1px solid ${C.dim}` }}>
                 <div style={{ display:'flex', alignItems:'center', gap:7 }}>
@@ -343,7 +340,7 @@ export default function RoueDuJour() {
               <div>⏰ Disponible toutes les <span style={{ color:C.txt }}>24 heures</span></div>
               <div>💚 Minimum garanti : <span style={{ color:C.green, fontWeight:700 }}>500 jetons</span></div>
               <div>🔴 Maximum standard : <span style={{ color:'#ff4444', fontWeight:700 }}>10 000 jetons</span></div>
-              <div>✨ Case mystère : jusqu'à <span style={{ color:'#ffd700', fontWeight:700 }}>50 000 jetons</span> !</div>
+              <div>✨ Case mystère : <span style={{ color:'#ffd700', fontWeight:700 }}>qui sait ce qu'elle cache... 🤫</span></div>
             </div>
           </div>
         </div>
