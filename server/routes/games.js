@@ -84,13 +84,15 @@ router.post('/plinko', authMiddleware, async (req, res) => {
   try {
     const enabled = await checkGameEnabled('plinko')
     if (!enabled) return res.status(403).json({ error: 'Plinko est temporairement désactivé.' })
-    const bet  = parseInt(req.body.bet)
-    const risk = req.body.risk || 'medium'
-    const ur   = await query(`SELECT * FROM users WHERE id = $1`, [req.user.id])
-    const user = ur.rows[0]
-    const err  = validateBet(bet, user.balance)
+    const bet    = parseInt(req.body.bet)
+    const risk   = req.body.risk || 'medium'
+    const bucket = parseInt(req.body.bucket)
+    const ur     = await query(`SELECT * FROM users WHERE id = $1`, [req.user.id])
+    const user   = ur.rows[0]
+    const err    = validateBet(bet, user.balance)
     if (err) return res.status(400).json({ error: err })
-    const result     = plinko.play(bet, risk)
+    if (isNaN(bucket) || bucket < 0 || bucket > 8) return res.status(400).json({ error: 'Bucket invalide' })
+    const result     = plinko.play(bet, risk, bucket)
     const newBalance = user.balance - bet + result.payout
     await query(`UPDATE users SET balance = $1 WHERE id = $2`, [newBalance, user.id])
     const hr = await query(`INSERT INTO game_history (user_id, game, bet, payout, meta) VALUES ($1,'plinko',$2,$3,$4) RETURNING id`,
