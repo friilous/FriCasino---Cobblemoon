@@ -378,37 +378,45 @@ export default function Plinko() {
   const [history,  setHistory]  = useState([])
   const [stats,    setStats]    = useState({ n: 0, w: 0, pnl: 0 })
 
-  // appelé quand la bille touche physiquement un bucket
-  const onLand = useCallback((id, _physBucket) => {
+  // Appelé par le moteur physique quand la bille atterrit réellement dans un bucket.
+  // C'est ICI qu'on appelle l'API avec le bucket physique — pas avant.
+  const onLand = useCallback(async (id, physBucket) => {
     const p = pend.current[id]
     if (!p) return
     delete pend.current[id]
-    setLast({ ...p })
-    setHistory(h => [{ id, ...p }, ...h].slice(0, 10))
-    setStats(s => ({ n: s.n + 1, w: s.w + (p.win ? 1 : 0), pnl: s.pnl + p.pnl }))
+
+    try {
+      const { data } = await axios.post('/api/games/plinko', {
+        bet:    p.bet,
+        risk:   p.risk,
+        bucket: physBucket,   // bucket réel déterminé par la physique
+      })
+      updateBalance(data.balance)
+      const pnl = data.payout - p.bet
+      const win = data.payout >= p.bet
+      const result = { payout: data.payout, mult: data.multiplier, pnl, win, color: p.color }
+      setLast(result)
+      setHistory(h => [{ id, ...result }, ...h].slice(0, 10))
+      setStats(s => ({ n: s.n + 1, w: s.w + (win ? 1 : 0), pnl: s.pnl + pnl }))
+    } catch (e) {
+      setErr(e.response?.data?.error || 'Erreur réseau')
+    }
+
     setDropping(false)
-  }, [])
+  }, [updateBalance])
 
   const { drop } = useEngine(cvs, risk, onLand)
 
-  async function play() {
+  // Lance la bille immédiatement — l'API sera appelée à l'atterrissage
+  function play() {
     if (dropping || !user || bet < 10 || bet > user.balance) return
     setDropping(true)
     setErr('')
-    try {
-      const { data } = await axios.post('/api/games/plinko', { bet, risk })
-      updateBalance(data.balance)
-      const id  = ++uid
-      const col = BALL_COLORS[id % BALL_COLORS.length]
-      const pnl = data.payout - bet   // profit net (peut être négatif)
-      const win = data.payout >= bet
-      // on stocke le résultat API — sera récupéré dans onLand
-      pend.current[id] = { payout: data.payout, mult: data.multiplier, pnl, win, color: col }
-      drop(id, col)
-    } catch (e) {
-      setErr(e.response?.data?.error || 'Erreur réseau')
-      setDropping(false)
-    }
+    const id  = ++uid
+    const col = BALL_COLORS[id % BALL_COLORS.length]
+    // Stocker les paramètres du lancer pour onLand
+    pend.current[id] = { bet, risk, color: col }
+    drop(id, col)
   }
 
   const ri = RISK[risk]
