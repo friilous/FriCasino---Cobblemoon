@@ -1,289 +1,361 @@
 import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { getRankFromWagered } from '../utils/ranks'
 
-const PRIZES = [
-  { label: '100 ✦',    amount: 100,   color: '#9CA3AF', weight: 30 },
-  { label: '250 ✦',    amount: 250,   color: '#22C55E', weight: 25 },
-  { label: '500 ✦',    amount: 500,   color: '#60A5FA', weight: 18 },
-  { label: '1k ✦',     amount: 1000,  color: '#A78BFA', weight: 12 },
-  { label: '2.5k ✦',   amount: 2500,  color: '#F0B429', weight: 8  },
-  { label: '5k ✦',     amount: 5000,  color: '#F0B429', weight: 4  },
-  { label: '10k ✦',    amount: 10000, color: '#FFD700', weight: 2  },
-  { label: '50k ✦',    amount: 50000, color: '#E8556A', weight: 1  },
+const C = { bg:'#06060f', surf:'#0c0c1e', border:'#1e1e3a', gold:'#f0b429', green:'#22c55e', txt:'#e2e2f0', muted:'#44446a', dim:'#12121f' }
+
+// ── Segments avec raretés ─────────────────────────────────────────────────────
+// La case mystère (❓) révèle au moment du résultat : 20k, 30k ou 50k (très rare)
+const SEGMENTS = [
+  { label:'500 jetons',    value:500,   color:'#6890f0', rarity:'Commun',     icon:'💙' },
+  { label:'1 000 jetons',  value:1000,  color:'#78c850', rarity:'Commun',     icon:'💚' },
+  { label:'500 jetons',    value:500,   color:'#6890f0', rarity:'Commun',     icon:'💙' },
+  { label:'2 000 jetons',  value:2000,  color:'#f0b429', rarity:'Peu commun', icon:'💛' },
+  { label:'500 jetons',    value:500,   color:'#6890f0', rarity:'Commun',     icon:'💙' },
+  { label:'1 000 jetons',  value:1000,  color:'#78c850', rarity:'Commun',     icon:'💚' },
+  { label:'3 000 jetons',  value:3000,  color:'#f85888', rarity:'Rare',       icon:'❤️' },
+  { label:'500 jetons',    value:500,   color:'#6890f0', rarity:'Commun',     icon:'💙' },
+  { label:'1 000 jetons',  value:1000,  color:'#78c850', rarity:'Commun',     icon:'💚' },
+  { label:'2 000 jetons',  value:2000,  color:'#f0b429', rarity:'Peu commun', icon:'💛' },
+  { label:'5 000 jetons',  value:5000,  color:'#a855f7', rarity:'Épique',     icon:'💜' },
+  { label:'500 jetons',    value:500,   color:'#6890f0', rarity:'Commun',     icon:'💙' },
+  { label:'1 000 jetons',  value:1000,  color:'#78c850', rarity:'Commun',     icon:'💚' },
+  { label:'500 jetons',    value:500,   color:'#6890f0', rarity:'Commun',     icon:'💙' },
+  { label:'3 000 jetons',  value:3000,  color:'#f85888', rarity:'Rare',       icon:'❤️' },
+  { label:'500 jetons',    value:500,   color:'#6890f0', rarity:'Commun',     icon:'💙' },
+  { label:'2 000 jetons',  value:2000,  color:'#f0b429', rarity:'Peu commun', icon:'💛' },
+  { label:'10 000 jetons', value:10000, color:'#ff4444', rarity:'Légendaire', icon:'🔴' },
+  { label:'500 jetons',    value:500,   color:'#6890f0', rarity:'Commun',     icon:'💙' },
+  { label:'1 000 jetons',  value:1000,  color:'#78c850', rarity:'Commun',     icon:'💚' },
+  { label:'❓ Mystère',    value:-1,    color:'#ffd700', rarity:'Mystère ✨',  icon:'❓', mystery:true },
+  { label:'500 jetons',    value:500,   color:'#6890f0', rarity:'Commun',     icon:'💙' },
+  { label:'1 000 jetons',  value:1000,  color:'#78c850', rarity:'Commun',     icon:'💚' },
+  { label:'5 000 jetons',  value:5000,  color:'#a855f7', rarity:'Épique',     icon:'💜' },
 ]
 
-const CHEST_STATES = {
-  idle:    { emoji: '🎁', label: 'Coffre disponible', color: '#A78BFA' },
-  opening: { emoji: '✨', label: 'Ouverture…',        color: '#FFD700' },
-  won:     { emoji: '🏆', label: 'Gagné !',           color: '#22C55E' },
-  empty:   { emoji: '🔒', label: 'Déjà ouvert',       color: 'rgba(245,230,200,0.25)' },
+const ITEM_W    = 118
+const ITEM_GAP  = 6
+const ITEM_FULL = ITEM_W + ITEM_GAP
+const VISIBLE   = 7
+const STRIP_W   = VISIBLE * ITEM_FULL
+const PRE_ITEMS = 46   // items avant le gagnant dans le strip
+
+function buildStrip(winIndex) {
+  const strip = []
+  for (let i = 0; i < PRE_ITEMS; i++) strip.push({ ...SEGMENTS[i % SEGMENTS.length], _i: i })
+  strip.push({ ...SEGMENTS[winIndex], _i: PRE_ITEMS, _winner: true })
+  for (let i = 0; i < 12; i++) strip.push({ ...SEGMENTS[(PRE_ITEMS + i + 1) % SEGMENTS.length], _i: PRE_ITEMS + 1 + i })
+  return strip
 }
 
 export default function RoueDuJour() {
   const { user, updateBalance } = useAuth()
-  const [canSpin,   setCanSpin]   = useState(false)
-  const [spinning,  setSpinning]  = useState(false)
-  const [result,    setResult]    = useState(null)
-  const [chestState,setChestState]= useState('idle')
-  const [streak,    setStreak]    = useState(0)
-  const [nextSpin,  setNextSpin]  = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [particles, setParticles] = useState([])
 
-  const rank = user?.total_wagered !== undefined ? getRankFromWagered(user.total_wagered) : null
+  const [status,    setStatus]    = useState(null)
+  const [spinning,  setSpinning]  = useState(false)
+  const [result,    setResult]    = useState(null)    // { segment, balance, next_spin, mysteryValue? }
+  const [err,       setErr]       = useState('')
+  const [offset,    setOffset]    = useState(0)
+  const [strip,     setStrip]     = useState(() => SEGMENTS.map((s, i) => ({ ...s, _i: i })))
+  const [winnerIdx, setWinnerIdx] = useState(null)
+  const [glowing,   setGlowing]   = useState(false)
+  const [revealed,  setRevealed]  = useState(false)  // animation reveal mystère
+  const rafRef = useRef(null)
+
+  // Compte à rebours
+  const [countdown, setCountdown] = useState('')
+  useEffect(() => {
+    if (!status?.next_spin) { setCountdown(''); return }
+    const upd = () => {
+      const diff = new Date(status.next_spin) - new Date()
+      if (diff <= 0) { setCountdown('Disponible !'); return }
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setCountdown(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`)
+    }
+    upd(); const t = setInterval(upd, 1000); return () => clearInterval(t)
+  }, [status?.next_spin])
 
   useEffect(() => {
-    axios.get('/api/wheel').then(r => {
-      setCanSpin(r.data.can_spin)
-      setStreak(r.data.streak || 0)
-      setNextSpin(r.data.next_spin)
-      if (!r.data.can_spin) setChestState('empty')
-    }).catch(() => {}).finally(() => setLoading(false))
-  }, [])
+    if (!user) return
+    axios.get('/api/wheel').then(r => setStatus(r.data)).catch(() => {})
+  }, [user])
 
-  async function openChest() {
-    if (!canSpin || spinning) return
-    setSpinning(true)
-    setChestState('opening')
-
-    // Animation dorée 1.5s
-    await new Promise(r => setTimeout(r, 1500))
-
+  async function handleSpin() {
+    if (!user || spinning || !status?.can_spin) return
+    setSpinning(true); setResult(null); setErr(''); setGlowing(false); setWinnerIdx(null); setRevealed(false)
     try {
-      const { data } = await axios.post('/api/wheel')
-      updateBalance(data.balance)
-      setResult(data)
-      setCanSpin(false)
-      setStreak(data.streak || 0)
-      setChestState('won')
+      const { data } = await axios.post('/api/wheel/spin')
+      const seg = data.segment
 
-      // Particules
-      setParticles(Array.from({ length: 20 }, (_, i) => ({
-        id: i,
-        x: 30 + Math.random() * 40,
-        y: 20 + Math.random() * 40,
-        size: 4 + Math.random() * 6,
-        color: ['#FFD700', '#F0B429', '#22C55E', '#A78BFA', '#F472B6'][Math.floor(Math.random() * 5)],
-        vx: (Math.random() - 0.5) * 200,
-        vy: -(50 + Math.random() * 150),
-      })))
-      setTimeout(() => setParticles([]), 2000)
-    } catch (err) {
-      const msg = err.response?.data?.error || ''
-      if (msg.includes('déjà')) { setChestState('empty'); setCanSpin(false) }
-      else setChestState('idle')
+      // Cas mystère : le serveur renvoie la vraie valeur dans data.mystery_value
+      // Si le serveur ne supporte pas encore mystery_value, on la génère côté client
+      let mysteryValue = null
+      let displaySeg   = seg
+
+      if (seg.mystery || seg.value === -1) {
+        // Tirage mystère côté client si le serveur ne le fait pas
+        mysteryValue = data.mystery_value || pickMysteryValue()
+        displaySeg   = { ...seg, mysteryValue }
+      }
+
+      // Trouver index dans SEGMENTS — pour le mystère on cherche la case mystère
+      let segIdx = SEGMENTS.findIndex(s => seg.mystery ? s.mystery : s.value === seg.value)
+      if (segIdx < 0) segIdx = 0
+
+      const newStrip = buildStrip(segIdx)
+      setStrip(newStrip)
+
+      // Calcul offset cible
+      const targetCenter = PRE_ITEMS * ITEM_FULL + ITEM_W / 2
+      const centerOffset = STRIP_W / 2
+      const targetX      = -(targetCenter - centerOffset)
+
+      setOffset(0)
+      const t0  = performance.now()
+      const dur = 5200
+      const easeOut = t => 1 - Math.pow(1 - t, 4)
+
+      const animate = now => {
+        const p = Math.min((now - t0) / dur, 1)
+        setOffset(targetX * easeOut(p))
+        if (p < 1) {
+          rafRef.current = requestAnimationFrame(animate)
+        } else {
+          setOffset(targetX)
+          setWinnerIdx(PRE_ITEMS)
+          setGlowing(true)
+          setResult({ segment: displaySeg, balance: data.balance, next_spin: data.next_spin, mysteryValue })
+          setStatus(s => ({ ...s, can_spin: false, next_spin: data.next_spin }))
+          updateBalance(data.balance)
+          setSpinning(false)
+          // Délai avant révélation mystère
+          if (seg.mystery || seg.value === -1) {
+            setTimeout(() => setRevealed(true), 800)
+          }
+        }
+      }
+      setTimeout(() => { rafRef.current = requestAnimationFrame(animate) }, 60)
+    } catch (e) {
+      setErr(e.response?.data?.error || 'Erreur')
+      setSpinning(false)
     }
-    setSpinning(false)
   }
 
-  function timeUntilMidnight() {
-    const now  = new Date()
-    const next = new Date(now)
-    next.setHours(24, 0, 0, 0)
-    const diff = next - now
-    const h = Math.floor(diff / 3600000)
-    const m = Math.floor((diff % 3600000) / 60000)
-    return `${h}h ${m}min`
+  function pickMysteryValue() {
+    const r = Math.random()
+    if (r < 0.005) return 50000  // 0.5% — ultra rare
+    if (r < 0.05)  return 30000  // 4.5% — très rare
+    return 20000                  // 95% du mystère
   }
 
-  const cs = CHEST_STATES[chestState] || CHEST_STATES.idle
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), [])
 
-  if (loading) return (
-    <div style={{ padding: '60px', textAlign: 'center', fontFamily: 'Crimson Pro, serif', color: 'rgba(245,230,200,0.3)', fontSize: 15 }}>
-      Chargement…
-    </div>
-  )
+  const canSpin = status?.can_spin && user && !spinning
+
+  // Couleur & texte du résultat selon si mystère révélé ou non
+  const resultColor = result?.mysteryValue
+    ? (result.mysteryValue >= 50000 ? '#ff4444' : result.mysteryValue >= 30000 ? '#a855f7' : '#f0b429')
+    : result?.segment?.color
+  const resultValue = result?.mysteryValue ?? result?.segment?.value
 
   return (
-    <div style={{ padding: '28px 32px', minHeight: '100%', boxSizing: 'border-box' }}>
-      <h1 style={{ fontFamily: 'Cinzel Decorative, serif', fontSize: 22, fontWeight: 900, color: '#F5E6C8', marginBottom: 6 }}>
-        Coffre du Jour
-      </h1>
-      <p style={{ fontFamily: 'Crimson Pro, serif', fontSize: 15, color: 'rgba(245,230,200,0.4)', marginBottom: 28 }}>
-        Un coffre gratuit chaque jour — jusqu'à 50 000 jetons à gagner
-      </p>
+    <div style={{ minHeight:'100vh', background:C.bg, padding:'24px 28px', boxSizing:'border-box' }}>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:20 }}>
+        <Link to="/casino" style={{ fontSize:11, color:C.muted, textDecoration:'none' }}>← Accueil</Link>
+        <span style={{ color:C.dim }}>/</span>
+        <span style={{ fontSize:11, color:'#9898b8' }}>🎁 Bonus du jour</span>
+      </div>
 
-        {/* Coffre */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{
-            background: 'linear-gradient(160deg, #1A0F1A, #110D16)',
-            border: `2px solid ${canSpin ? cs.color + '60' : 'rgba(255,255,255,0.08)'}`,
-            borderRadius: 20, padding: '40px 30px', textAlign: 'center',
-            position: 'relative', overflow: 'hidden',
-            boxShadow: canSpin ? `0 0 40px ${cs.color}20` : 'none',
-            transition: 'all 0.5s',
-          }}>
-            {/* Particules */}
-            {particles.map(p => (
-              <div key={p.id} style={{
-                position: 'absolute',
-                left: `${p.x}%`, top: `${p.y}%`,
-                width: p.size, height: p.size,
-                borderRadius: '50%',
-                background: p.color,
-                animation: 'confettiFall 1.8s ease forwards',
-                pointerEvents: 'none', zIndex: 10,
-              }} />
-            ))}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 280px', gap:16, maxWidth:920 }}>
 
-            {/* Streak */}
-            {streak > 0 && (
-              <div style={{
-                position: 'absolute', top: 14, right: 14,
-                fontFamily: 'Cinzel, serif', fontSize: 10,
-                background: 'rgba(240,180,41,0.15)',
-                border: '1px solid rgba(240,180,41,0.3)',
-                color: '#F0B429', borderRadius: 20,
-                padding: '3px 10px',
-              }}>
-                🔥 {streak} jour{streak > 1 ? 's' : ''} d'affilée
+        {/* Zone principale */}
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <div style={{ background:C.surf, border:`1px solid ${C.border}`, borderRadius:18, padding:'24px 24px 28px' }}>
+
+            {/* Titre */}
+            <div style={{ textAlign:'center', marginBottom:22 }}>
+              <div style={{ fontSize:24, fontWeight:900, color:C.gold, letterSpacing:3, textShadow:`0 0 20px ${C.gold}60` }}>
+                BONUS DU JOUR
               </div>
-            )}
-
-            {/* Coffre emoji */}
-            <div style={{
-              fontSize: 80, marginBottom: 16,
-              filter: `drop-shadow(0 0 ${chestState === 'opening' || chestState === 'won' ? 30 : 10}px ${cs.color}60)`,
-              animation: chestState === 'opening' ? 'float 0.3s ease-in-out infinite' : chestState === 'idle' && canSpin ? 'float 3s ease-in-out infinite' : 'none',
-              transition: 'all 0.4s',
-            }}>
-              {cs.emoji}
+              <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>
+                Une ouverture <span style={{ color:C.txt, fontWeight:700 }}>gratuite</span> toutes les 24h · min{' '}
+                <span style={{ color:C.green, fontWeight:700 }}>500</span> jetons garantis
+              </div>
             </div>
 
-            <div style={{
-              fontFamily: 'Cinzel, serif', fontSize: 15, fontWeight: 700,
-              color: cs.color, marginBottom: 8,
-            }}>
-              {cs.label}
+            {/* ── Strip CS:GO ── */}
+            <div style={{ position:'relative', margin:'0 auto', width:STRIP_W }}>
+
+              {/* Flèches */}
+              <div style={{ position:'absolute', top:-13, left:'50%', transform:'translateX(-50%)', width:0, height:0, borderLeft:'9px solid transparent', borderRight:'9px solid transparent', borderTop:`13px solid ${C.gold}`, zIndex:10, filter:`drop-shadow(0 0 8px ${C.gold})` }} />
+              <div style={{ position:'absolute', bottom:-13, left:'50%', transform:'translateX(-50%)', width:0, height:0, borderLeft:'9px solid transparent', borderRight:'9px solid transparent', borderBottom:`13px solid ${C.gold}`, zIndex:10, filter:`drop-shadow(0 0 8px ${C.gold})` }} />
+
+              {/* Encadré central */}
+              <div style={{ position:'absolute', top:0, bottom:0, left:'50%', transform:'translateX(-50%)', width:ITEM_W+6, border:`2px solid ${C.gold}`, borderRadius:10, zIndex:5, pointerEvents:'none', boxShadow:`0 0 20px ${C.gold}45, inset 0 0 10px ${C.gold}10` }} />
+
+              {/* Fenêtre */}
+              <div style={{ width:STRIP_W, height:165, overflow:'hidden', borderRadius:12, background:C.dim, border:`1px solid ${C.border}`, position:'relative' }}>
+                {/* Dégradés latéraux */}
+                <div style={{ position:'absolute', top:0, left:0, bottom:0, width:90, background:`linear-gradient(90deg,${C.dim},transparent)`, zIndex:4, pointerEvents:'none' }} />
+                <div style={{ position:'absolute', top:0, right:0, bottom:0, width:90, background:`linear-gradient(270deg,${C.dim},transparent)`, zIndex:4, pointerEvents:'none' }} />
+
+                {/* Bande animée */}
+                <div style={{ display:'flex', gap:ITEM_GAP, position:'absolute', top:0, left:0, height:'100%', transform:`translateX(${offset}px)`, willChange:'transform' }}>
+                  {strip.map((seg, i) => {
+                    const isWin = winnerIdx !== null && i === winnerIdx
+                    const isMystery = seg.mystery
+                    return (
+                      <div key={i} style={{
+                        width:ITEM_W, height:'100%', flexShrink:0, borderRadius:8,
+                        background: isWin && glowing ? `linear-gradient(180deg,${seg.color}35,${seg.color}15)` : '#08081a',
+                        border: isWin && glowing ? `2px solid ${seg.color}` : `1px solid ${C.border}`,
+                        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:7,
+                        boxShadow: isWin && glowing ? `0 0 24px ${seg.color}55` : 'none',
+                        transition: isWin ? 'all .4s' : 'none',
+                        animation: isMystery && isWin && glowing ? 'mysteryPulse 1.2s ease-in-out infinite' : 'none',
+                      }}>
+                        {/* Icône */}
+                        <div style={{
+                          width:46, height:46, borderRadius:12,
+                          background:`${seg.color}20`, border:`2px solid ${seg.color}50`,
+                          display:'flex', alignItems:'center', justifyContent:'center', fontSize:24,
+                        }}>
+                          {isMystery && isWin && revealed ? '✨' : seg.icon}
+                        </div>
+                        {/* Label */}
+                        <div style={{ fontSize: seg.value >= 5000 ? 10 : 12, fontWeight:800, color:seg.color, textAlign:'center', lineHeight:1.2, padding:'0 6px' }}>
+                          {isMystery && isWin && revealed
+                            ? `${result.mysteryValue?.toLocaleString('fr-FR')} jetons`
+                            : seg.label}
+                        </div>
+                        {/* Rareté */}
+                        <div style={{ fontSize:9, color:seg.color, fontWeight:600, textTransform:'uppercase', letterSpacing:0.5, opacity:0.75 }}>
+                          {seg.rarity}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Résultat */}
-            {chestState === 'won' && result && (
-              <div style={{ marginBottom: 16, animation: 'scaleIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards' }}>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 36, fontWeight: 900, color: '#FFD700', textShadow: '0 0 30px rgba(255,215,0,0.6)' }}>
-                  +{(result.won * (rank?.bonusWheel || 1)).toFixed(0) === result.won.toString()
-                    ? result.won.toLocaleString('fr-FR')
-                    : result.won.toLocaleString('fr-FR')}
-                </div>
-                <div style={{ fontFamily: 'Cinzel, serif', fontSize: 11, color: 'rgba(240,180,41,0.5)', marginTop: 4 }}>jetons</div>
-                {rank && rank.bonusWheel > 1 && (
-                  <div style={{ fontFamily: 'Cinzel, serif', fontSize: 10, color: rank.color, marginTop: 6, background: `${rank.color}15`, border: `1px solid ${rank.color}30`, padding: '3px 12px', borderRadius: 20, display: 'inline-block' }}>
-                    {rank.icon} Bonus rang ×{rank.bonusWheel}
-                  </div>
+            {result && (
+              <div style={{
+                marginTop:22,
+                background:`${resultColor}10`, border:`1px solid ${resultColor}30`,
+                borderRadius:14, padding:'18px 22px', textAlign:'center',
+                animation:'slideIn .4s ease',
+              }}>
+                {result.mysteryValue && !revealed ? (
+                  <div style={{ fontSize:13, color:C.muted }}>⏳ Révélation en cours…</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize:12, color:C.muted, marginBottom:6 }}>
+                      {result.mysteryValue ? '✨ La case mystère révèle…' : '🎉 Tu as gagné'}
+                    </div>
+                    <div style={{ fontSize:42, fontWeight:900, color:resultColor, fontFamily:'monospace', textShadow:`0 0 24px ${resultColor}80` }}>
+                      +{resultValue?.toLocaleString('fr-FR')}
+                    </div>
+                    <div style={{ fontSize:13, color:C.muted, marginTop:4 }}>
+                      jetons · {result.mysteryValue
+                        ? (result.mysteryValue >= 50000 ? '🌟 ULTRA RARE' : result.mysteryValue >= 30000 ? '💜 Très rare' : '💛 Rare')
+                        : result.segment.rarity}
+                    </div>
+                  </>
                 )}
               </div>
             )}
 
             {/* Bouton */}
-            <button
-              onClick={openChest}
-              disabled={!canSpin || spinning}
-              style={{
-                padding: '16px 36px',
-                background: !canSpin
-                  ? 'rgba(255,255,255,0.04)'
-                  : spinning
-                  ? 'rgba(167,139,250,0.2)'
-                  : 'linear-gradient(135deg, #A78BFA, #8B5CF6)',
-                color: !canSpin ? 'rgba(245,230,200,0.2)' : spinning ? '#A78BFA' : '#fff',
-                fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: 14,
-                borderRadius: 12, border: 'none',
-                cursor: !canSpin || spinning ? 'not-allowed' : 'pointer',
-                boxShadow: canSpin && !spinning ? '0 4px 20px rgba(139,92,246,0.4)' : 'none',
-                transition: 'all 0.2s',
-                letterSpacing: '0.05em', textTransform: 'uppercase',
-              }}
-            >
-              {spinning ? '✨ Ouverture…' : !canSpin ? '🔒 Déjà ouvert' : '🎁 Ouvrir le coffre'}
+            <button onClick={handleSpin} disabled={!canSpin} style={{
+              display:'block', width:'100%', maxWidth:360, margin:'20px auto 0',
+              padding:'15px', fontSize:15, fontWeight:900, border:'none', borderRadius:12,
+              background: canSpin ? `linear-gradient(135deg,${C.gold},#fbbf24)` : C.dim,
+              color: canSpin ? '#06060f' : C.muted,
+              cursor: canSpin ? 'pointer' : 'not-allowed',
+              boxShadow: canSpin ? `0 0 28px ${C.gold}55` : 'none',
+              transition:'all .2s', letterSpacing:1,
+            }}>
+              {!user ? 'Connecte-toi pour jouer'
+                : spinning ? '⏳ Ouverture en cours…'
+                : !status?.can_spin ? `⏰ Reviens dans ${countdown}`
+                : '🎁 Récupérer mon bonus du jour !'}
             </button>
-
-            {!canSpin && (
-              <div style={{ fontFamily: 'Crimson Pro, serif', fontSize: 13, color: 'rgba(245,230,200,0.3)', marginTop: 14 }}>
-                Prochain coffre dans <span style={{ color: '#A78BFA', fontWeight: 600 }}>{timeUntilMidnight()}</span>
-              </div>
-            )}
+            {err && <div style={{ textAlign:'center', marginTop:10, fontSize:11, color:'#ef4444' }}>⚠ {err}</div>}
           </div>
-
-          {/* Streak bonus */}
-          {streak >= 2 && (
-            <div style={{ background: 'rgba(240,180,41,0.06)', border: '1px solid rgba(240,180,41,0.2)', borderRadius: 14, padding: '14px 18px' }}>
-              <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: '#F0B429', marginBottom: 8 }}>🔥 Streak en cours</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {Array.from({ length: 7 }, (_, i) => (
-                  <div key={i} style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: i < streak ? 'rgba(240,180,41,0.3)' : 'rgba(255,255,255,0.04)',
-                    border: `2px solid ${i < streak ? '#F0B429' : 'rgba(255,255,255,0.08)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 12,
-                  }}>
-                    {i < streak ? '🔥' : ''}
-                  </div>
-                ))}
-                <span style={{ fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(245,230,200,0.3)' }}>→ 🎁 bonus</span>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Droite — Prizes + Info */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Panneau droit */}
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
 
-          {/* Rang bonus */}
-          {rank && rank.bonusWheel > 1 && (
-            <div style={{ background: `${rank.color}0a`, border: `1px solid ${rank.color}25`, borderRadius: 14, padding: '14px 18px' }}>
-              <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: rank.color, marginBottom: 4 }}>
-                {rank.icon} Bonus {rank.name}
-              </div>
-              <div style={{ fontFamily: 'Crimson Pro, serif', fontSize: 13, color: 'rgba(245,230,200,0.5)' }}>
-                Ton rang multiplie tous tes gains par <span style={{ color: rank.color, fontWeight: 700 }}>×{rank.bonusWheel}</span>
-              </div>
+          {/* Stats joueur */}
+          {status && user && (
+            <div style={{ background:C.surf, border:`1px solid ${C.border}`, borderRadius:14, padding:16 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:C.gold, textTransform:'uppercase', letterSpacing:1, marginBottom:12 }}>Mes stats</div>
+              {[
+                ['Total gagné',   `${(status.total_won ?? 0).toLocaleString('fr-FR')} jetons`],
+                ['Ouvertures',    status.spins ?? 0],
+                ['Prochain spin', status.can_spin ? '✅ Disponible !' : countdown],
+              ].map(([l, v]) => (
+                <div key={l} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'7px 0', borderBottom:`1px solid ${C.dim}` }}>
+                  <span style={{ color:C.muted }}>{l}</span>
+                  <span style={{ fontWeight:700, color:C.txt }}>{v}</span>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Table des prix */}
-          <div style={{ background: 'linear-gradient(160deg,#1E1015,#150D10)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 18 }}>
-            <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: 'rgba(245,230,200,0.5)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              Récompenses possibles
-            </div>
-            {PRIZES.map((p, i) => {
-              const barW = (p.weight / PRIZES[0].weight) * 100
-              return (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 60, fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: p.color, flexShrink: 0 }}>
-                    {p.label}
-                  </div>
-                  <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${barW}%`, background: `linear-gradient(90deg, ${p.color}80, ${p.color})`, borderRadius: 3 }} />
-                  </div>
-                  <div style={{ fontFamily: 'Cinzel, serif', fontSize: 9, color: 'rgba(245,230,200,0.25)', width: 30, textAlign: 'right', flexShrink: 0 }}>
-                    {p.weight}%
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Info */}
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 14, padding: '14px 18px' }}>
-            <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: 'rgba(245,230,200,0.4)', marginBottom: 10 }}>Avantages par rang</div>
+          {/* Gains possibles */}
+          <div style={{ background:C.surf, border:`1px solid ${C.border}`, borderRadius:14, padding:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.gold, textTransform:'uppercase', letterSpacing:1, marginBottom:12 }}>Gains possibles</div>
             {[
-              { name: 'Champion+', icon: '🏆', bonus: '×1.5 tous les gains' },
-              { name: 'Maître+',   icon: '💎', bonus: '×1.75 · 2× par jour' },
-              { name: 'Legend',    icon: '🌙', bonus: '×3 · Illimité' },
-            ].map(({ name, icon, bonus }) => (
-              <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <span style={{ fontFamily: 'Crimson Pro, serif', fontSize: 12, color: 'rgba(245,230,200,0.4)' }}>{icon} {name}</span>
-                <span style={{ fontFamily: 'Cinzel, serif', fontSize: 11, color: '#F0B429', fontWeight: 700 }}>{bonus}</span>
+              { label:'500 jetons',      color:'#6890f0', rarity:'Commun' },
+              { label:'1 000 jetons',    color:'#78c850', rarity:'Commun' },
+              { label:'2 000 jetons',    color:'#f0b429', rarity:'Peu commun' },
+              { label:'3 000 jetons',    color:'#f85888', rarity:'Rare' },
+              { label:'5 000 jetons',    color:'#a855f7', rarity:'Épique' },
+              { label:'10 000 jetons',   color:'#ff4444', rarity:'Légendaire' },
+              { label:'❓ Mystère',      color:'#ffd700', rarity:'Mystère ✨' },
+            ].map((seg, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'5px 0', borderBottom:`1px solid ${C.dim}` }}>
+                <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                  <div style={{ width:9, height:9, borderRadius:2, background:seg.color, flexShrink:0 }} />
+                  <span style={{ fontSize:11, color:C.txt }}>{seg.label}</span>
+                </div>
+                <span style={{ fontSize:9, color:seg.color, fontWeight:600 }}>{seg.rarity}</span>
               </div>
             ))}
           </div>
+
+          {/* Règles */}
+          <div style={{ background:C.surf, border:`1px solid ${C.border}`, borderRadius:14, padding:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.gold, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Règles</div>
+            <div style={{ fontSize:11, color:C.muted, lineHeight:1.9 }}>
+              <div>🎁 <span style={{ color:C.txt, fontWeight:700 }}>Gratuit</span> — 1 ouverture par jour</div>
+              <div>⏰ Disponible toutes les <span style={{ color:C.txt }}>24 heures</span></div>
+              <div>💚 Minimum garanti : <span style={{ color:C.green, fontWeight:700 }}>500 jetons</span></div>
+              <div>🔴 Maximum standard : <span style={{ color:'#ff4444', fontWeight:700 }}>10 000 jetons</span></div>
+              <div>✨ Case mystère : <span style={{ color:'#ffd700', fontWeight:700 }}>qui sait ce qu'elle cache... 🤫</span></div>
+            </div>
+          </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes mysteryPulse {
+          0%,100% { box-shadow: 0 0 20px #ffd70070; }
+          50%      { box-shadow: 0 0 40px #ffd700cc; }
+        }
+        @keyframes slideIn {
+          from { opacity:0; transform:translateY(-8px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+      `}</style>
     </div>
   )
 }
