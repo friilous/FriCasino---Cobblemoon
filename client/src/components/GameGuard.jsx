@@ -2,12 +2,12 @@ import { Link } from 'react-router-dom'
 import { useSocket } from '../contexts/SocketContext'
 
 const GAME_NAMES = {
-  slots: 'Slot Machine', roulette: 'Roulette Pokémon',
-  crash: 'Crash', blackjack: 'Blackjack', mines: 'Mines', plinko: 'Plinko',
+  slots: 'Slot Machine', roulette: 'Roulette',
+  blackjack: 'Blackjack', mines: 'Mines', plinko: 'Plinko',
 }
 const GAME_ICONS = {
-  slots: '🎰', roulette: '🎯', crash: '📈',
-  blackjack: '🃏', mines: '💣', plinko: '🪀',
+  slots: '🎰', roulette: '🎡',
+  blackjack: '🃏', mines: '💣', plinko: '⚪',
 }
 
 export default function GameGuard({ game, children }) {
@@ -16,35 +16,53 @@ export default function GameGuard({ game, children }) {
 
   if (!enabled) {
     return (
-      <div style={{ padding: '24px 28px', minHeight: '100vh', background: '#07071a', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 40 }}>
-          <Link to="/casino" style={{ fontSize: 11, color: '#44446a', textDecoration: 'none' }}>← Lobby</Link>
-          <span style={{ color: '#2a2a4a' }}>/</span>
-          <span style={{ fontSize: 11, color: '#5a5a8a' }}>{GAME_ICONS[game]} {GAME_NAMES[game]}</span>
-        </div>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{
-            background: '#0a0a20', border: '1px solid rgba(240,192,64,0.2)',
-            borderRadius: 16, padding: '40px 48px', textAlign: 'center', maxWidth: 400,
+      <div style={{
+        minHeight: '100%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 40,
+      }}>
+        <div style={{
+          maxWidth: 400, textAlign: 'center',
+          background: 'linear-gradient(135deg, #1E1015, #150D10)',
+          border: '1px solid rgba(240,180,41,0.2)',
+          borderRadius: 20, padding: '48px 40px',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        }}>
+          <div style={{ fontSize: 64, marginBottom: 20 }}>🔧</div>
+          <h2 style={{
+            fontFamily: 'Cinzel Decorative, serif',
+            fontSize: 18, fontWeight: 700, color: '#F0B429',
+            marginBottom: 12,
           }}>
-            <div style={{ fontSize: 56, marginBottom: 16 }}>🔧</div>
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#f0c040', margin: '0 0 10px' }}>
-              Machine temporairement désactivée
-            </h2>
-            <p style={{ fontSize: 13, color: '#5a5a8a', lineHeight: 1.6, margin: '0 0 24px' }}>
-              {GAME_ICONS[game]} <strong style={{ color: '#9898b8' }}>{GAME_NAMES[game]}</strong> est
-              momentanément indisponible. Reviens dans quelques instants !
-            </p>
-            <p style={{ fontSize: 11, color: '#2e2e50', margin: '0 0 24px' }}>
-              Un problème ? Contacte <span style={{ color: '#f0c040' }}>Frilous</span> sur Discord (<span style={{ color: '#f0c040' }}>.Frilous</span>)
-            </p>
-            <Link to="/casino" style={{
-              display: 'inline-block', background: '#f0c040', color: '#07071a',
-              fontWeight: 800, fontSize: 13, padding: '10px 24px', borderRadius: 8, textDecoration: 'none',
-            }}>
-              ← Retour au lobby
-            </Link>
-          </div>
+            Machine en maintenance
+          </h2>
+          <p style={{
+            fontFamily: 'Crimson Pro, serif',
+            fontSize: 15, color: 'rgba(245,230,200,0.6)',
+            lineHeight: 1.7, marginBottom: 8,
+          }}>
+            {GAME_ICONS[game]} <strong style={{ color: 'rgba(245,230,200,0.9)' }}>{GAME_NAMES[game]}</strong> est
+            momentanément indisponible. Reviens dans quelques instants !
+          </p>
+          <p style={{ fontFamily: 'Crimson Pro, serif', fontSize: 12, color: 'rgba(245,230,200,0.3)', marginBottom: 32 }}>
+            Un problème ? Contacte <span style={{ color: '#F0B429' }}>Frilous</span> sur Discord
+          </p>
+          <Link to="/machines" style={{ textDecoration: 'none' }}>
+            <button style={{
+              fontFamily: 'Cinzel, serif',
+              background: 'linear-gradient(135deg, #FFD700, #F0B429)',
+              color: '#1A0A00', fontWeight: 700, fontSize: 13,
+              padding: '12px 28px', borderRadius: 10, border: 'none',
+              cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase',
+              boxShadow: '0 4px 20px rgba(240,180,41,0.35)',
+              transition: 'all 0.2s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'none'}
+            >
+              ← Retour aux machines
+            </button>
+          </Link>
         </div>
       </div>
     )

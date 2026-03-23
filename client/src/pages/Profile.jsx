@@ -2,32 +2,37 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { getRankFromWagered, getNextRank, getXPProgress, RANKS } from '../utils/ranks'
 
-const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎯', crash: '📈', blackjack: '🃏', mines: '💣' }
-const GAME_NAMES = { slots: 'Slots', plinko: 'Plinko', roulette: 'Roulette', crash: 'Crash', blackjack: 'Blackjack', mines: 'Mines' }
+const GAME_ICONS = { slots:'🎰', plinko:'⚪', roulette:'🎡', blackjack:'🃏', mines:'💣' }
+const GAME_NAMES = { slots:'Slots', plinko:'Plinko', roulette:'Roulette', blackjack:'Blackjack', mines:'Mines' }
 
 const FILTERS = [
-  { id: 'all',      label: 'Tout' },
-  { id: 'wins',     label: '✅ Gains' },
-  { id: 'losses',   label: '❌ Pertes' },
-  { id: 'big_wins', label: '🔥 Gros gains' },
+  { id:'all',      label:'Tout' },
+  { id:'wins',     label:'✅ Gains' },
+  { id:'losses',   label:'❌ Pertes' },
+  { id:'big_wins', label:'🔥 Gros gains' },
 ]
 
 export default function Profile() {
   const { user } = useAuth()
-  const [history,       setHistory]       = useState(null)
-  const [gameHistory,   setGameHistory]   = useState([])
-  const [tab,           setTab]           = useState('stats')
-  const [histFilter,    setHistFilter]    = useState('all')
-  const [histPage,      setHistPage]      = useState(0)
-  const [histTotal,     setHistTotal]     = useState(0)
-  const [loadingHist,   setLoadingHist]   = useState(false)
-  const [withdrawAmount, setWithdrawAmount] = useState('')
-  const [withdrawMsg,   setWithdrawMsg]   = useState('')
-  const [withdrawError, setWithdrawError] = useState('')
-  const [withdrawLoading, setWithdrawLoading] = useState(false)
+  const [history,          setHistory]          = useState(null)
+  const [gameHistory,      setGameHistory]      = useState([])
+  const [tab,              setTab]              = useState('overview')
+  const [histFilter,       setHistFilter]       = useState('all')
+  const [histPage,         setHistPage]         = useState(0)
+  const [histTotal,        setHistTotal]        = useState(0)
+  const [loadingHist,      setLoadingHist]      = useState(false)
+  const [withdrawAmount,   setWithdrawAmount]   = useState('')
+  const [withdrawMsg,      setWithdrawMsg]      = useState('')
+  const [withdrawError,    setWithdrawError]    = useState('')
+  const [withdrawLoading,  setWithdrawLoading]  = useState(false)
 
   const LIMIT = 20
+
+  const rank     = user?.total_wagered !== undefined ? getRankFromWagered(user.total_wagered) : null
+  const nextRank = rank ? getNextRank(rank.id) : null
+  const xp       = rank && nextRank ? getXPProgress(user?.total_wagered || 0, rank, nextRank) : 100
 
   useEffect(() => {
     axios.get('/api/wallet/history').then(r => setHistory(r.data)).catch(() => {})
@@ -60,22 +65,18 @@ export default function Profile() {
       setHistory(r.data)
     } catch (err) {
       setWithdrawError(err.response?.data?.error || 'Erreur')
-    } finally {
-      setWithdrawLoading(false)
-    }
+    } finally { setWithdrawLoading(false) }
   }
 
-  // Stats calculées depuis l'historique wallet
-  const games      = history?.games || []
-  const totalWon   = games.reduce((s, g) => s + (g.payout > g.bet ? g.payout - g.bet : 0), 0)
-  const totalLost  = games.reduce((s, g) => s + (g.payout < g.bet ? g.bet - g.payout : 0), 0)
-  const netPnl     = totalWon - totalLost
-  const gamesCount = games.length
-  const winCount   = games.filter(g => g.payout > g.bet).length
-  const winRate    = gamesCount > 0 ? Math.round((winCount / gamesCount) * 100) : 0
-  const biggestWin = games.reduce((m, g) => Math.max(m, g.payout - g.bet), 0)
+  const games       = history?.games || []
+  const totalWon    = games.reduce((s, g) => s + (g.payout > g.bet ? g.payout - g.bet : 0), 0)
+  const totalLost   = games.reduce((s, g) => s + (g.payout < g.bet ? g.bet - g.payout : 0), 0)
+  const netPnl      = totalWon - totalLost
+  const gamesCount  = games.length
+  const winCount    = games.filter(g => g.payout > g.bet).length
+  const winRate     = gamesCount > 0 ? Math.round((winCount / gamesCount) * 100) : 0
+  const biggestWin  = games.reduce((m, g) => Math.max(m, g.payout - g.bet), 0)
 
-  // Stats par jeu
   const byGame = games.reduce((acc, g) => {
     if (!acc[g.game]) acc[g.game] = { plays: 0, profit: 0, wins: 0 }
     acc[g.game].plays++
@@ -84,223 +85,292 @@ export default function Profile() {
     return acc
   }, {})
 
+  const favGame = Object.entries(byGame).sort((a,b) => b[1].plays - a[1].plays)[0]
+
   const totalPages = Math.ceil(histTotal / LIMIT)
 
   return (
-    <div style={{ padding: '24px 28px', minHeight: '100vh', background: '#07071a' }}>
+    <div style={{ padding: '28px 32px', minHeight: '100%', boxSizing: 'border-box' }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+      {/* ── Hero profil ── */}
+      <div style={{
+        background: 'linear-gradient(160deg, #1E1015, #150D10)',
+        border: rank ? `1px solid ${rank.color}30` : '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 20, padding: '24px 28px', marginBottom: 24,
+        position: 'relative', overflow: 'hidden',
+        boxShadow: rank ? `0 0 40px ${rank.color}0a` : 'none',
+      }}>
+        {/* Ligne déco */}
         <div style={{
-          width: 44, height: 44, borderRadius: '50%',
-          background: '#1a1a3a', border: '2px solid rgba(240,192,64,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 16, color: '#f0c040', fontWeight: 800,
-        }}>
-          {user?.username?.slice(0, 2).toUpperCase()}
-        </div>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#d8d8f0', margin: 0 }}>
-            {user?.username}
-          </h1>
-          <p style={{ fontSize: 11, color: '#44446a', margin: '2px 0 0' }}>Mon profil & statistiques</p>
-        </div>
-        <div style={{ marginLeft: 'auto' }}>
-          <Link to={`/joueur/${user?.username}`} style={{
-            fontSize: 11, color: '#5a5a8a', textDecoration: 'none',
-            padding: '5px 12px', border: '1px solid #2a2a4a', borderRadius: 8,
+          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+          background: rank ? `linear-gradient(90deg, transparent, ${rank.color}, transparent)` : 'transparent',
+        }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+          {/* Avatar */}
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%', flexShrink: 0,
+            background: rank ? `linear-gradient(135deg, ${rank.color}40, ${rank.color}20)` : 'rgba(240,180,41,0.15)',
+            border: `2px solid ${rank?.color || 'rgba(240,180,41,0.4)'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'Cinzel Decorative, serif', fontSize: 18, color: rank?.color || '#F0B429', fontWeight: 900,
+            boxShadow: rank ? `0 0 20px ${rank.color}30` : 'none',
           }}>
-            👁️ Voir profil public
+            {user?.username?.slice(0, 2).toUpperCase()}
+          </div>
+
+          {/* Infos */}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <h1 style={{ fontFamily: 'Cinzel, serif', fontSize: 20, fontWeight: 700, color: '#F5E6C8', margin: 0 }}>
+                {user?.username}
+              </h1>
+              {rank && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  fontFamily: 'Cinzel, serif', fontSize: 11, fontWeight: 700,
+                  color: rank.color,
+                  background: `${rank.color}18`,
+                  border: `1px solid ${rank.color}40`,
+                  padding: '3px 10px', borderRadius: 20,
+                }}>
+                  {rank.icon} {rank.name}
+                </div>
+              )}
+            </div>
+            {nextRank ? (
+              <>
+                <div style={{ fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(245,230,200,0.3)', marginBottom: 6 }}>
+                  Progression → {nextRank.icon} {nextRank.name}
+                </div>
+                <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', maxWidth: 300 }}>
+                  <div style={{
+                    height: '100%', width: `${xp}%`,
+                    background: `linear-gradient(90deg, ${rank?.color}88, ${rank?.color})`,
+                    borderRadius: 3, transition: 'width 1.5s ease',
+                  }} />
+                </div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(245,230,200,0.25)', marginTop: 4 }}>
+                  {(user?.total_wagered || 0).toLocaleString('fr-FR')} / {nextRank.threshold.toLocaleString('fr-FR')} ✦ misés
+                </div>
+              </>
+            ) : (
+              <div style={{ fontFamily: 'Cinzel, serif', fontSize: 11, color: '#FFD700' }}>✦ Rang Maximum — CobbleMoon Legend ✦</div>
+            )}
+          </div>
+
+          {/* Solde + Retrait */}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(240,180,41,0.5)', letterSpacing: '0.15em', marginBottom: 4 }}>
+              SOLDE
+            </div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 24, fontWeight: 700, color: '#FFD700', marginBottom: 10 }}>
+              {(user?.balance || 0).toLocaleString('fr-FR')} ✦
+            </div>
+            <form onSubmit={handleWithdraw} style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)}
+                placeholder="Montant (min 100)" min={100} max={user?.balance}
+                style={{
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(240,180,41,0.2)',
+                  borderRadius: 8, padding: '7px 12px', color: '#F5E6C8',
+                  fontFamily: 'Crimson Pro, serif', fontSize: 13, outline: 'none', width: 170,
+                }}
+              />
+              <button type="submit" disabled={withdrawLoading || !withdrawAmount} style={{
+                background: 'linear-gradient(135deg, #FFD700, #F0B429)', color: '#1A0A00',
+                fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: 11,
+                padding: '7px 14px', borderRadius: 8, border: 'none',
+                cursor: withdrawLoading || !withdrawAmount ? 'not-allowed' : 'pointer',
+                opacity: withdrawLoading || !withdrawAmount ? 0.5 : 1,
+              }}>
+                {withdrawLoading ? '…' : '💸 Retrait'}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Messages retrait */}
+        {withdrawMsg && (
+          <div style={{ marginTop: 12, padding: '8px 14px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 8, fontFamily: 'Crimson Pro, serif', fontSize: 13, color: '#22C55E' }}>
+            ✅ {withdrawMsg}
+          </div>
+        )}
+        {withdrawError && (
+          <div style={{ marginTop: 12, padding: '8px 14px', background: 'rgba(196,30,58,0.08)', border: '1px solid rgba(196,30,58,0.2)', borderRadius: 8, fontFamily: 'Crimson Pro, serif', fontSize: 13, color: '#E8556A' }}>
+            ⚠ {withdrawError}
+          </div>
+        )}
+
+        <div style={{ marginTop: 12, textAlign: 'right' }}>
+          <Link to={`/joueur/${user?.username}`} style={{
+            fontFamily: 'Cinzel, serif', fontSize: 11, color: 'rgba(245,230,200,0.3)',
+            textDecoration: 'none', letterSpacing: '0.05em',
+          }}>
+            👁 Voir profil public →
           </Link>
         </div>
       </div>
 
-      {/* Solde + retrait */}
-      <div style={{
-        background: '#0a0a20', border: '1px solid rgba(240,192,64,0.25)',
-        borderRadius: 12, padding: '16px 20px', marginBottom: 16,
-        display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
-      }}>
-        <div>
-          <div style={{ fontSize: 9, color: '#44446a', textTransform: 'uppercase', letterSpacing: 1 }}>Solde</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: '#f0c040' }}>
-            {(user?.balance || 0).toLocaleString()}
-            <span style={{ fontSize: 11, color: '#666', fontWeight: 400, marginLeft: 6 }}>jetons</span>
-          </div>
-        </div>
-        <div style={{ width: 1, height: 40, background: '#2a2a4a' }} />
-        <form onSubmit={handleWithdraw} style={{ display: 'flex', gap: 8, flex: 1, minWidth: 260 }}>
-          <input
-            type="number"
-            value={withdrawAmount}
-            onChange={e => setWithdrawAmount(e.target.value)}
-            placeholder="Montant à retirer (min 100)"
-            min={100} max={user?.balance}
-            style={{
-              flex: 1, background: '#07071a',
-              border: '1px solid #2a2a4a', borderRadius: 8,
-              padding: '9px 14px', color: '#d8d8f0', fontSize: 13, outline: 'none',
-            }}
-          />
-          <button type="submit" disabled={withdrawLoading || !withdrawAmount} style={{
-            background: '#f0c040', color: '#07071a', fontWeight: 800,
-            padding: '9px 18px', borderRadius: 8, border: 'none',
-            cursor: withdrawLoading || !withdrawAmount ? 'not-allowed' : 'pointer',
-            opacity: withdrawLoading || !withdrawAmount ? 0.5 : 1, flexShrink: 0,
-          }}>
-            {withdrawLoading ? '...' : '💸 Retirer'}
-          </button>
-        </form>
-      </div>
-      {withdrawMsg && <div style={{ marginBottom: 12, padding: '8px 14px', background: 'rgba(64,240,128,0.08)', border: '1px solid rgba(64,240,128,0.2)', borderRadius: 8, fontSize: 12, color: '#40f080' }}>{withdrawMsg}</div>}
-      {withdrawError && <div style={{ marginBottom: 12, padding: '8px 14px', background: 'rgba(240,64,64,0.08)', border: '1px solid rgba(240,64,64,0.2)', borderRadius: 8, fontSize: 12, color: '#f06060' }}>{withdrawError}</div>}
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+      {/* ── Tabs ── */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, borderBottom: '1px solid rgba(240,180,41,0.1)', paddingBottom: 12 }}>
         {[
-          { id: 'stats',        label: '📊 Statistiques' },
-          { id: 'history',      label: '🎮 Historique parties' },
-          { id: 'transactions', label: '📋 Transactions' },
-          { id: 'withdrawals',  label: '💸 Retraits' },
+          { id: 'overview',      label: '📊 Vue d\'ensemble' },
+          { id: 'history',       label: '🎮 Historique' },
+          { id: 'transactions',  label: '📋 Transactions' },
+          { id: 'withdrawals',   label: '💸 Retraits' },
+          { id: 'ranks',         label: '🏆 Rangs' },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            fontFamily: 'Cinzel, serif',
             cursor: 'pointer', border: 'none',
-            background: tab === t.id ? 'rgba(240,192,64,0.12)' : 'transparent',
-            color: tab === t.id ? '#f0c040' : '#5a5a8a',
+            background: tab === t.id ? 'rgba(240,180,41,0.12)' : 'transparent',
+            color: tab === t.id ? '#F0B429' : 'rgba(245,230,200,0.4)',
+            transition: 'all 0.15s',
           }}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* Stats */}
-      {tab === 'stats' && (
+      {/* ── Overview ── */}
+      {tab === 'overview' && (
         <div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
-            <StatCard label="Parties jouées" value={gamesCount} icon="🎮" />
-            <StatCard label="Taux de victoire" value={`${winRate}%`} icon="🎯" color={winRate > 50 ? '#40f080' : '#f06060'} />
-            <StatCard label="Bilan net" value={`${netPnl >= 0 ? '+' : ''}${netPnl.toLocaleString()}`} icon="💰"
-              color={netPnl >= 0 ? '#40f080' : '#f06060'} />
-            <StatCard label="Plus gros gain" value={`+${biggestWin.toLocaleString()}`} icon="🔥" color="#f0c040" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+            <MiniStat label="Parties jouées" value={gamesCount} icon="🎮" />
+            <MiniStat label="Taux de victoire" value={`${winRate}%`} icon="🎯" color={winRate > 50 ? '#22C55E' : '#EF4444'} />
+            <MiniStat label="Bilan net" value={`${netPnl >= 0 ? '+' : ''}${netPnl.toLocaleString('fr-FR')}`} icon="💰" color={netPnl >= 0 ? '#22C55E' : '#EF4444'} />
+            <MiniStat label="Plus gros gain" value={`+${biggestWin.toLocaleString('fr-FR')}`} icon="🔥" color="#F0B429" />
           </div>
 
-          {/* Stats par jeu */}
-          {Object.keys(byGame).length > 0 && (
-            <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
-              <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: '0 0 14px' }}>
-                Statistiques par jeu
-              </h2>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid #1e1e40' }}>
-                      {['Jeu', 'Parties', 'Victoires', 'Taux', 'Bilan'].map(h => (
-                        <th key={h} style={{ padding: '8px 10px', textAlign: h === 'Jeu' ? 'left' : 'right', color: '#44446a', fontWeight: 600 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(byGame).sort((a, b) => b[1].plays - a[1].plays).map(([game, s]) => (
-                      <tr key={game} style={{ borderBottom: '1px solid #0f0f28' }}>
-                        <td style={{ padding: '9px 10px', color: '#c8c8e8', fontWeight: 600 }}>
-                          {GAME_ICONS[game]} {GAME_NAMES[game] || game}
-                        </td>
-                        <td style={{ padding: '9px 10px', textAlign: 'right', color: '#9898b8' }}>{s.plays}</td>
-                        <td style={{ padding: '9px 10px', textAlign: 'right', color: '#9898b8' }}>{s.wins}</td>
-                        <td style={{ padding: '9px 10px', textAlign: 'right', color: s.wins / s.plays > 0.5 ? '#40f080' : '#f06060' }}>
-                          {Math.round(s.wins / s.plays * 100)}%
-                        </td>
-                        <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: s.profit >= 0 ? '#40f080' : '#f06060' }}>
-                          {s.profit >= 0 ? '+' : ''}{s.profit.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {favGame && (
+            <div style={{
+              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: 12, padding: '14px 18px', marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <span style={{ fontSize: 32 }}>{GAME_ICONS[favGame[0]] || '🎲'}</span>
+              <div>
+                <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, color: 'rgba(240,180,41,0.6)', marginBottom: 2 }}>Jeu favori</div>
+                <div style={{ fontFamily: 'Cinzel, serif', fontSize: 16, fontWeight: 700, color: '#F5E6C8' }}>
+                  {GAME_NAMES[favGame[0]]} — {favGame[1].plays} parties
+                </div>
+              </div>
+              <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: favGame[1].profit >= 0 ? '#22C55E' : '#EF4444' }}>
+                  {favGame[1].profit >= 0 ? '+' : ''}{favGame[1].profit.toLocaleString('fr-FR')} ✦
+                </div>
+                <div style={{ fontFamily: 'Crimson Pro, serif', fontSize: 11, color: 'rgba(245,230,200,0.3)' }}>bilan</div>
               </div>
             </div>
           )}
 
+          {Object.keys(byGame).length > 0 && (
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: 18 }}>
+              <h2 style={{ fontFamily: 'Cinzel, serif', fontSize: 13, fontWeight: 700, color: 'rgba(245,230,200,0.5)', marginBottom: 14, letterSpacing: '0.1em' }}>
+                Par jeu
+              </h2>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    {['Jeu', 'Parties', 'Victoires', 'Taux', 'Bilan'].map(h => (
+                      <th key={h} style={{ padding: '8px 10px', textAlign: h === 'Jeu' ? 'left' : 'right', fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(245,230,200,0.3)', borderBottom: '1px solid rgba(255,255,255,0.06)', letterSpacing: '0.1em' }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(byGame).sort((a,b) => b[1].plays - a[1].plays).map(([game, s]) => (
+                    <tr key={game}>
+                      <td style={{ padding: '10px', fontFamily: 'Cinzel, serif', fontSize: 13, fontWeight: 700, color: '#F5E6C8', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        {GAME_ICONS[game]} {GAME_NAMES[game] || game}
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(245,230,200,0.5)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>{s.plays}</td>
+                      <td style={{ padding: '10px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(245,230,200,0.5)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>{s.wins}</td>
+                      <td style={{ padding: '10px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: s.wins/s.plays > 0.5 ? '#22C55E' : '#EF4444', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        {Math.round(s.wins/s.plays*100)}%
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: s.profit >= 0 ? '#22C55E' : '#EF4444', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        {s.profit >= 0 ? '+' : ''}{s.profit.toLocaleString('fr-FR')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {gamesCount === 0 && (
-            <EmptyState text="Aucune partie jouée pour l'instant" />
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: 'rgba(245,230,200,0.2)', fontFamily: 'Crimson Pro, serif', fontSize: 15 }}>
+              Aucune partie jouée — commence dès maintenant ! 🎰
+            </div>
           )}
         </div>
       )}
 
-      {/* Historique parties avec filtres */}
+      {/* ── Historique parties ── */}
       {tab === 'history' && (
-        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: 18 }}>
           <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
             {FILTERS.map(f => (
               <button key={f.id} onClick={() => { setHistFilter(f.id); setHistPage(0) }} style={{
-                padding: '5px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-                cursor: 'pointer', border: histFilter === f.id ? '1px solid rgba(240,192,64,0.4)' : '1px solid #2a2a4a',
-                background: histFilter === f.id ? 'rgba(240,192,64,0.12)' : 'transparent',
-                color: histFilter === f.id ? '#f0c040' : '#5a5a8a',
+                padding: '5px 14px', borderRadius: 8, fontSize: 11,
+                fontFamily: 'Cinzel, serif', cursor: 'pointer',
+                border: histFilter === f.id ? '1px solid rgba(240,180,41,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                background: histFilter === f.id ? 'rgba(240,180,41,0.1)' : 'transparent',
+                color: histFilter === f.id ? '#F0B429' : 'rgba(245,230,200,0.35)',
               }}>
                 {f.label}
               </button>
             ))}
-            <span style={{ marginLeft: 'auto', fontSize: 10, color: '#44446a', alignSelf: 'center' }}>
+            <span style={{ marginLeft: 'auto', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(245,230,200,0.25)', alignSelf: 'center' }}>
               {histTotal} résultats
             </span>
           </div>
 
           {loadingHist ? (
-            <div style={{ textAlign: 'center', color: '#2e2e50', padding: '20px 0', fontSize: 12 }}>Chargement...</div>
+            <div style={{ textAlign: 'center', color: 'rgba(245,230,200,0.2)', padding: '20px 0', fontFamily: 'Crimson Pro, serif' }}>Chargement…</div>
           ) : gameHistory.length === 0 ? (
-            <EmptyState text="Aucune partie dans cette catégorie" />
+            <div style={{ textAlign: 'center', color: 'rgba(245,230,200,0.2)', padding: '20px 0', fontFamily: 'Crimson Pro, serif' }}>Aucune partie dans cette catégorie</div>
           ) : (
             <>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid #1e1e40' }}>
-                      {['#BetID', 'Jeu', 'Mise', 'Gain', 'Date'].map(h => (
-                        <th key={h} style={{ padding: '8px 10px', textAlign: h === '#BetID' || h === 'Jeu' ? 'left' : 'right', color: '#44446a', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gameHistory.map(g => (
-                      <tr key={g.id} style={{ borderBottom: '1px solid #0f0f28' }}>
-                        <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 10, color: '#5a5a8a' }}>
-                          {g.bet_id}
-                        </td>
-                        <td style={{ padding: '8px 10px', color: '#c8c8e8' }}>
-                          {GAME_ICONS[g.game]} {GAME_NAMES[g.game] || g.game}
-                        </td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#9898b8' }}>
-                          {parseInt(g.bet).toLocaleString()}
-                        </td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700,
-                          color: parseInt(g.payout) > 0 ? '#40f080' : '#f06060' }}>
-                          {parseInt(g.payout) > 0 ? `+${parseInt(g.payout).toLocaleString()}` : `−${parseInt(g.bet).toLocaleString()}`}
-                        </td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 10, color: '#44446a' }}>
-                          {new Date(g.created_at).toLocaleString('fr')}
-                        </td>
-                      </tr>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    {['#Réf', 'Jeu', 'Mise', 'Résultat', 'Date'].map(h => (
+                      <th key={h} style={{ padding: '8px 10px', textAlign: h === '#Réf' || h === 'Jeu' ? 'left' : 'right', fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(245,230,200,0.3)', borderBottom: '1px solid rgba(255,255,255,0.06)', letterSpacing: '0.08em' }}>
+                        {h}
+                      </th>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
+                  </tr>
+                </thead>
+                <tbody>
+                  {gameHistory.map(g => (
+                    <tr key={g.id}>
+                      <td style={{ padding: '8px 10px', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(245,230,200,0.25)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>{g.bet_id}</td>
+                      <td style={{ padding: '8px 10px', fontFamily: 'Cinzel, serif', fontSize: 12, color: '#F5E6C8', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        {GAME_ICONS[g.game]} {GAME_NAMES[g.game] || g.game}
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'rgba(245,230,200,0.4)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        {parseInt(g.bet).toLocaleString('fr-FR')}
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: parseInt(g.payout) > 0 ? '#22C55E' : '#EF4444', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        {parseInt(g.payout) > 0 ? `+${parseInt(g.payout).toLocaleString('fr-FR')}` : `−${parseInt(g.bet).toLocaleString('fr-FR')}`}
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(245,230,200,0.25)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        {new Date(g.created_at).toLocaleString('fr-FR')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
               {totalPages > 1 && (
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 14 }}>
-                  <button onClick={() => setHistPage(p => Math.max(0, p - 1))} disabled={histPage === 0}
-                    style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #2a2a4a', background: 'transparent', color: histPage === 0 ? '#2a2a4a' : '#9898b8', cursor: histPage === 0 ? 'not-allowed' : 'pointer', fontSize: 12 }}>
-                    ← Préc
-                  </button>
-                  <span style={{ padding: '5px 12px', fontSize: 12, color: '#5a5a8a' }}>
-                    {histPage + 1} / {totalPages}
-                  </span>
-                  <button onClick={() => setHistPage(p => Math.min(totalPages - 1, p + 1))} disabled={histPage >= totalPages - 1}
-                    style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #2a2a4a', background: 'transparent', color: histPage >= totalPages - 1 ? '#2a2a4a' : '#9898b8', cursor: histPage >= totalPages - 1 ? 'not-allowed' : 'pointer', fontSize: 12 }}>
-                    Suiv →
-                  </button>
+                  <PaginBtn disabled={histPage === 0} onClick={() => setHistPage(p => p - 1)}>← Préc</PaginBtn>
+                  <span style={{ padding: '5px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(245,230,200,0.3)' }}>{histPage + 1} / {totalPages}</span>
+                  <PaginBtn disabled={histPage >= totalPages - 1} onClick={() => setHistPage(p => p + 1)}>Suiv →</PaginBtn>
                 </div>
               )}
             </>
@@ -308,67 +378,118 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Transactions */}
+      {/* ── Transactions ── */}
       {tab === 'transactions' && (
-        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
-          {!history ? <LoadingState /> :
-            history.transactions.length === 0 ? <EmptyState text="Aucune transaction" /> :
-            history.transactions.map(tx => (
-              <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #0f0f28', fontSize: 12 }}>
-                <div>
-                  <div style={{ color: '#c8c8e8' }}>{tx.description || tx.type}</div>
-                  <div style={{ fontSize: 10, color: '#44446a' }}>{new Date(tx.created_at).toLocaleString('fr')}</div>
-                </div>
-                <div style={{ fontWeight: 700, color: ['credit','win'].includes(tx.type) ? '#40f080' : '#f06060' }}>
-                  {['credit','win'].includes(tx.type) ? '+' : '-'}{tx.amount.toLocaleString()}
-                </div>
-              </div>
-            ))
-          }
-        </div>
+        <SimpleList items={history?.transactions || []} renderItem={tx => ({
+          left: tx.description || tx.type,
+          sub: new Date(tx.created_at).toLocaleString('fr-FR'),
+          right: `${['credit','win'].includes(tx.type) ? '+' : '-'}${tx.amount.toLocaleString('fr-FR')}`,
+          rightColor: ['credit','win'].includes(tx.type) ? '#22C55E' : '#EF4444',
+        })} />
       )}
 
-      {/* Retraits */}
+      {/* ── Retraits ── */}
       {tab === 'withdrawals' && (
-        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
-          {!history ? <LoadingState /> :
-            history.withdrawals.length === 0 ? <EmptyState text="Aucun retrait" /> :
-            history.withdrawals.map(w => (
-              <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #0f0f28', fontSize: 12 }}>
-                <div>
-                  <div style={{ color: '#c8c8e8', fontWeight: 600 }}>{w.amount.toLocaleString()} jetons</div>
-                  <div style={{ fontSize: 10, color: '#44446a' }}>{new Date(w.created_at).toLocaleString('fr')}</div>
+        <SimpleList items={history?.withdrawals || []} renderItem={w => ({
+          left: `${w.amount.toLocaleString('fr-FR')} jetons`,
+          sub: new Date(w.created_at).toLocaleString('fr-FR'),
+          right: w.status === 'approved' ? '✅ Approuvé' : w.status === 'rejected' ? '❌ Refusé' : '⏳ En attente',
+          rightColor: w.status === 'approved' ? '#22C55E' : w.status === 'rejected' ? '#EF4444' : '#F0B429',
+        })} />
+      )}
+
+      {/* ── Rangs ── */}
+      {tab === 'ranks' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {RANKS.map(r => {
+            const isCurrentRank = rank?.id === r.id
+            const isUnlocked = (user?.total_wagered || 0) >= r.threshold
+            return (
+              <div key={r.id} style={{
+                background: isCurrentRank ? `${r.color}10` : 'rgba(255,255,255,0.02)',
+                border: `1px solid ${isCurrentRank ? r.color + '40' : 'rgba(255,255,255,0.06)'}`,
+                borderRadius: 12, padding: '14px 18px',
+                opacity: isUnlocked ? 1 : 0.45,
+                display: 'flex', alignItems: 'center', gap: 14,
+              }}>
+                <span style={{ fontSize: 26, flexShrink: 0 }}>{r.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                    <span style={{ fontFamily: 'Cinzel, serif', fontSize: 14, fontWeight: 700, color: r.color }}>
+                      {r.name}
+                    </span>
+                    {isCurrentRank && (
+                      <span style={{ fontFamily: 'Cinzel, serif', fontSize: 9, color: r.color, background: `${r.color}20`, border: `1px solid ${r.color}40`, padding: '2px 8px', borderRadius: 20 }}>
+                        ACTUEL
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontFamily: 'Crimson Pro, serif', fontSize: 12, color: 'rgba(245,230,200,0.4)' }}>
+                    {r.description} — Seuil : {r.threshold.toLocaleString('fr-FR')} ✦ misés
+                  </div>
                 </div>
-                <span style={{
-                  fontSize: 10, fontWeight: 600, padding: '3px 10px', borderRadius: 10,
-                  background: w.status === 'approved' ? 'rgba(64,240,128,0.12)' : w.status === 'rejected' ? 'rgba(240,64,64,0.12)' : 'rgba(240,192,64,0.12)',
-                  color: w.status === 'approved' ? '#40f080' : w.status === 'rejected' ? '#f06060' : '#f0c040',
-                }}>
-                  {w.status === 'approved' ? '✅ Approuvé' : w.status === 'rejected' ? '❌ Refusé' : '⏳ En attente'}
-                </span>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(245,230,200,0.3)', marginBottom: 4 }}>Avantages</div>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: r.color }}>
+                    Mise max {r.maxBet === 999999 ? 'Illimitée' : r.maxBet.toLocaleString('fr-FR')}
+                  </div>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(245,230,200,0.4)' }}>
+                    Retrait max {r.maxWithdraw === 999999 ? 'Illimité' : r.maxWithdraw.toLocaleString('fr-FR')}
+                  </div>
+                </div>
               </div>
-            ))
-          }
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-function StatCard({ label, value, icon, color = '#d8d8f0' }) {
+function MiniStat({ label, value, icon, color = '#F5E6C8' }) {
   return (
-    <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
-      <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color }}>{value}</div>
-      <div style={{ fontSize: 10, color: '#44446a', marginTop: 3 }}>{label}</div>
+    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '14px 16px', textAlign: 'center' }}>
+      <div style={{ fontSize: 20, marginBottom: 6 }}>{icon}</div>
+      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 16, fontWeight: 700, color }}>{value}</div>
+      <div style={{ fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(245,230,200,0.3)', marginTop: 3 }}>{label}</div>
     </div>
   )
 }
 
-function EmptyState({ text }) {
-  return <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0', fontSize: 12 }}>{text}</div>
+function SimpleList({ items, renderItem }) {
+  if (!items || items.length === 0) {
+    return <div style={{ textAlign: 'center', color: 'rgba(245,230,200,0.2)', padding: '40px 0', fontFamily: 'Crimson Pro, serif' }}>Aucun élément</div>
+  }
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: 18 }}>
+      {items.map((item, i) => {
+        const { left, sub, right, rightColor } = renderItem(item)
+        return (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div>
+              <div style={{ fontFamily: 'Crimson Pro, serif', fontSize: 14, color: '#F5E6C8' }}>{left}</div>
+              {sub && <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(245,230,200,0.25)', marginTop: 2 }}>{sub}</div>}
+            </div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: rightColor || '#F5E6C8' }}>
+              {right}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
-function LoadingState() {
-  return <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0', fontSize: 12 }}>Chargement...</div>
+function PaginBtn({ children, onClick, disabled }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      padding: '5px 14px', borderRadius: 6,
+      border: '1px solid rgba(240,180,41,0.2)', background: 'transparent',
+      color: disabled ? 'rgba(240,180,41,0.2)' : 'rgba(240,180,41,0.6)',
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      fontFamily: 'Cinzel, serif', fontSize: 11,
+    }}>
+      {children}
+    </button>
+  )
 }
