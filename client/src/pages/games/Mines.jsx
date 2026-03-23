@@ -1,294 +1,170 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../../contexts/AuthContext'
 import BetInput from '../../components/BetInput'
+import LiveFeed from '../../components/LiveFeed'
 
-const SPRITE = dex => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`
+const C={bg:'#06060f',surf:'#0c0c1e',border:'#1e1e3a',gold:'#f0b429',green:'#22c55e',red:'#ef4444',txt:'#e2e2f0',muted:'#44446a',dim:'#12121f'}
+const SPRITE=dex=>`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`
 
-// Voltorbe = 100, Electrode = 101
-const MINE_IMG  = SPRITE(100)
-const TOKEN_IMG = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/coin.png'
-
-function Cell({ idx, state, onClick, disabled }) {
-  const [hov, setHov] = useState(false)
-
-  const styles = {
-    hidden: {
-      background: hov && !disabled ? 'rgba(109,40,217,.15)' : 'rgba(109,40,217,.06)',
-      border: `1px solid ${hov && !disabled ? 'rgba(124,58,237,.5)' : 'rgba(109,40,217,.15)'}`,
-      cursor: disabled ? 'not-allowed' : 'pointer',
-      transform: hov && !disabled ? 'scale(1.04)' : 'scale(1)',
-    },
-    token: {
-      background: 'rgba(16,185,129,.12)',
-      border: '1px solid rgba(16,185,129,.4)',
-      boxShadow: '0 0 12px rgba(16,185,129,.2)',
-      cursor: 'default',
-    },
-    mine: {
-      background: 'rgba(239,68,68,.25)',
-      border: '2px solid rgba(239,68,68,.7)',
-      boxShadow: '0 0 20px rgba(239,68,68,.4)',
-      animation: 'shakeX .3s ease',
-      cursor: 'default',
-    },
-    mine_other: {
-      background: 'rgba(239,68,68,.06)',
-      border: '1px solid rgba(239,68,68,.15)',
-      opacity: .5,
-      cursor: 'default',
-    },
-  }
-
-  const st = styles[state] || styles.hidden
-
-  return (
-    <div
-      style={{ ...st, borderRadius:8, aspectRatio:1, display:'flex', alignItems:'center', justifyContent:'center', transition:'all .12s', position:'relative', overflow:'hidden' }}
-      onClick={() => state === 'hidden' && !disabled && onClick(idx)}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-    >
-      {state === 'hidden' && (
-        <span style={{ fontFamily:'Orbitron,monospace', fontSize:13, fontWeight:700, color: hov && !disabled ? 'rgba(124,58,237,.8)' : 'rgba(109,40,217,.3)' }}>?</span>
-      )}
-      {state === 'token' && (
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-          <div style={{ width:26, height:26, borderRadius:'50%', background:'linear-gradient(135deg,#fbbf24,#f59e0b)', boxShadow:'0 0 8px rgba(251,191,36,.5)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>✦</div>
-        </div>
-      )}
-      {(state === 'mine' || state === 'mine_other') && (
-        <img src={MINE_IMG} alt="Voltorbe" style={{ width:32, height:32, imageRendering:'pixelated', filter: state === 'mine' ? 'drop-shadow(0 0 8px rgba(239,68,68,.8))' : 'grayscale(.5)' }} onError={e => { e.target.textContent = '💣'; e.target.style.fontSize = '20px' }} />
-      )}
-    </div>
-  )
+function drawToken(ctx,x,y,r){
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle='#f0c040';ctx.shadowColor='#f0c040';ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0
+  ctx.strokeStyle='#ffd060';ctx.lineWidth=2;ctx.stroke()
+  ctx.beginPath();ctx.arc(x,y,r*.65,0,Math.PI*2);ctx.strokeStyle='#a07020';ctx.lineWidth=1.5;ctx.stroke()
+  ctx.beginPath();ctx.arc(x,y,r*.35,0,Math.PI*2);ctx.fillStyle='#a07020';ctx.fill()
+  ctx.beginPath();ctx.arc(x,y,r*.15,0,Math.PI*2);ctx.fillStyle='#f0c040';ctx.fill()
+  ctx.beginPath();ctx.moveTo(x-r*.35,y);ctx.lineTo(x+r*.35,y);ctx.strokeStyle='#a07020';ctx.lineWidth=1.5;ctx.stroke()
 }
 
-export default function Mines() {
-  const { user, updateBalance } = useAuth()
-  const [bet,      setBet]     = useState(100)
-  const [nMines,   setNMines]  = useState(3)
-  const [phase,    setPhase]   = useState('idle') // idle | playing | done
-  const [revealed, setRevealed]= useState([])
-  const [minePos,  setMinePos] = useState([])
-  const [hitCell,  setHitCell] = useState(null)
-  const [mult,     setMult]    = useState(1)
-  const [payout,   setPayout]  = useState(0)
-  const [loading,  setLoading] = useState(false)
-  const [err,      setErr]     = useState('')
-  const [outcome,  setOutcome] = useState(null) // 'win'|'lose'|'cashout'
-  const [history,  setHistory] = useState([])
+function Cell({i,state,onClick,disabled}){
+  const cv=useRef(null)
+  useEffect(()=>{if(state!=='token')return;const c=cv.current;if(!c)return;const ctx=c.getContext('2d');ctx.clearRect(0,0,64,64);drawToken(ctx,32,32,22)},[state])
+  const base={width:62,height:62,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',cursor:disabled?'default':'pointer',transition:'all .15s',position:'relative',overflow:'hidden'}
+  if(state==='hidden')return<div onClick={()=>!disabled&&onClick(i)} style={{...base,background:'#0d0d28',border:`1px solid ${C.border}`,cursor:disabled?'not-allowed':'pointer'}} onMouseEnter={e=>{if(!disabled)e.currentTarget.style.borderColor=C.gold+'70'}} onMouseLeave={e=>{if(!disabled)e.currentTarget.style.borderColor=C.border}}><span style={{fontSize:20,opacity:.2,color:C.muted}}>?</span></div>
+  if(state==='token')return<div style={{...base,background:`${C.gold}12`,border:`1px solid ${C.gold}45`}}><canvas ref={cv} width={64} height={64} style={{position:'absolute',inset:0}}/></div>
+  if(state==='mine')return<div style={{...base,background:`${C.red}28`,border:`2px solid ${C.red}80`,boxShadow:`0 0 18px ${C.red}50`}}><img src={SPRITE(100)} alt="" style={{width:54,height:54,imageRendering:'pixelated'}}/></div>
+  if(state==='mine_other')return<div style={{...base,background:`${C.red}08`,border:`1px solid ${C.red}28`,opacity:.55}}><img src={SPRITE(100)} alt="" style={{width:50,height:50,imageRendering:'pixelated',filter:'grayscale(.6)'}}/></div>
+  return null
+}
 
-  function cellState(i) {
-    if (phase === 'done' || phase === 'idle') {
-      if (i === hitCell) return 'mine'
-      if (minePos.includes(i)) return 'mine_other'
-      if (revealed.includes(i)) return 'token'
-      return 'hidden'
-    }
-    if (revealed.includes(i)) return 'token'
-    return 'hidden'
+export default function Mines(){
+  const {user,updateBalance}=useAuth()
+  const [bet,setBet]=useState(100),[mines,setMines]=useState(3)
+  const [phase,setPhase]=useState('idle'),[revealed,setRevealed]=useState([])
+  const [minePos,setMinePos]=useState([]),[mult,setMult]=useState(1)
+  const [payout,setPayout]=useState(0),[loading,setLoading]=useState(false)
+  const [err,setErr]=useState(''),[history,setHistory]=useState([]),[hit,setHit]=useState(null)
+
+  function cellState(i){
+    if(['exploded','cashed','won'].includes(phase)){if(i===hit)return'mine';if(minePos.includes(i))return'mine_other';if(revealed.includes(i))return'token'}
+    if(revealed.includes(i))return'token';return'hidden'
+  }
+  async function start(){
+    if(bet<10||bet>(user?.balance||0))return;setLoading(true);setErr('')
+    try{const{data}=await axios.post('/api/games/mines',{action:'start',bet,minesCount:mines});updateBalance(data.balance);setPhase('playing');setRevealed([]);setMinePos([]);setMult(1);setPayout(0);setHit(null)}
+    catch(e){setErr(e.response?.data?.error||'Erreur réseau')}finally{setLoading(false)}
+  }
+  async function reveal(i){
+    if(phase!=='playing'||revealed.includes(i)||loading)return;setLoading(true)
+    try{
+      const{data}=await axios.post('/api/games/mines',{action:'reveal',cellIndex:i})
+      if(data.status==='exploded'){setHit(i);setMinePos(data.mines||[]);setRevealed(p=>[...p,i]);setPhase('exploded');setMult(0);setPayout(0);setHistory(p=>[{status:'exploded',bet,payout:0},...p].slice(0,6))}
+      else{setRevealed(p=>[...p,i]);setMult(data.multiplier);setPayout(data.payout);if(data.status==='won'){setMinePos(data.mines||[]);setPhase('won');updateBalance(data.balance);setHistory(p=>[{status:'won',bet,payout:data.payout},...p].slice(0,6))}}
+    }catch(e){setErr(e.response?.data?.error||'Erreur réseau')}finally{setLoading(false)}
+  }
+  async function cashout(){
+    if(phase!=='playing'||!revealed.length||loading)return;setLoading(true)
+    try{const{data}=await axios.post('/api/games/mines',{action:'cashout'});setMinePos(data.mines||[]);setPhase('cashed');setMult(data.multiplier);setPayout(data.payout);updateBalance(data.balance);setHistory(p=>[{status:'cashed',bet,payout:data.payout},...p].slice(0,6))}
+    catch(e){setErr(e.response?.data?.error||'Erreur réseau')}finally{setLoading(false)}
   }
 
-  async function start() {
-    if (bet < 10 || bet > (user?.balance||0)) return
-    setLoading(true); setErr('')
-    try {
-      const { data } = await axios.post('/api/games/mines', { action:'start', bet, minesCount:nMines })
-      updateBalance(data.balance)
-      setPhase('playing'); setRevealed([]); setMinePos([]); setHitCell(null); setMult(1); setPayout(0); setOutcome(null)
-    } catch(e) { setErr(e.response?.data?.error || 'Erreur') }
-    setLoading(false)
-  }
+  const playing=phase==='playing',done=['exploded','cashed','won'].includes(phase)
+  const canCashout=playing&&revealed.length>0&&!loading
+  const statusCol=phase==='exploded'?C.red:C.green
 
-  async function reveal(idx) {
-    if (phase !== 'playing' || loading || revealed.includes(idx)) return
-    setLoading(true)
-    try {
-      const { data } = await axios.post('/api/games/mines', { action:'reveal', cellIndex:idx })
-      if (data.status === 'exploded') {
-        setHitCell(idx); setRevealed(p=>[...p,idx]); setMinePos(data.mines||[])
-        setPhase('done'); setMult(0); setPayout(0); setOutcome('lose')
-        setHistory(h=>[{lose:true,bet},...h].slice(0,8))
-      } else {
-        setRevealed(p=>[...p,idx]); setMult(data.multiplier); setPayout(data.payout)
-        if (data.status === 'won') {
-          setMinePos(data.mines||[]); setPhase('done'); setOutcome('win')
-          updateBalance(data.balance)
-          setHistory(h=>[{lose:false,payout:data.payout},...h].slice(0,8))
-        }
-      }
-    } catch(e) { setErr(e.response?.data?.error || 'Erreur') }
-    setLoading(false)
-  }
-
-  async function cashout() {
-    if (phase !== 'playing' || !revealed.length || loading) return
-    setLoading(true)
-    try {
-      const { data } = await axios.post('/api/games/mines', { action:'cashout' })
-      setMinePos(data.mines||[]); setPhase('done'); setOutcome('cashout')
-      setMult(data.multiplier); setPayout(data.payout)
-      updateBalance(data.balance)
-      setHistory(h=>[{lose:false,payout:data.payout},...h].slice(0,8))
-    } catch(e) { setErr(e.response?.data?.error || 'Erreur') }
-    setLoading(false)
-  }
-
-  const playing = phase === 'playing'
-  const canCashout = playing && revealed.length > 0 && !loading
-  const firstMult = parseFloat(((25/(25-nMines))*0.92).toFixed(2))
-
-  return (
-    <div className="game-page">
-      <div className="game-breadcrumb">
-        <Link to="/machines" className="breadcrumb-link">← Machines</Link>
-        <span className="breadcrumb-sep">/</span>
-        <span className="breadcrumb-current">💣 Mines</span>
+  return(
+    <div style={{minHeight:'100vh',background:C.bg,padding:'16px',boxSizing:'border-box',display:'flex',flexDirection:'column',gap:12}}>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <Link to="/casino" style={{fontSize:11,color:C.muted,textDecoration:'none'}}>← Lobby</Link>
+        <span style={{color:C.dim}}>/</span>
+        <span style={{fontSize:13,color:C.gold,fontWeight:700}}>💣 Mines</span>
       </div>
 
-      <div className="game-body">
-        {/* ── Contrôles ── */}
-        <div className="game-controls-panel">
-          <div className="card">
-            {phase === 'idle' || phase === 'done' ? (
+      <div style={{display:'flex',gap:12,alignItems:'start',flex:1}}>
+
+        {/* GAUCHE */}
+        <div style={{width:220,flexShrink:0,display:'flex',flexDirection:'column',gap:10}}>
+          <div style={{background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
+            {!playing?(
               <>
-                <BetInput bet={bet} setBet={setBet} disabled={loading} />
-                <hr className="sep" />
-                <div className="field-label">Voltorbe (mines)</div>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                  <input type="range" min={1} max={24} value={nMines} onChange={e=>setNMines(parseInt(e.target.value))} style={{ flex:1, accentColor:'#ef4444' }} disabled={loading} />
-                  <div style={{ fontFamily:'Orbitron,monospace', fontSize:16, fontWeight:700, color:'#ef4444', minWidth:28, textAlign:'right' }}>{nMines}</div>
+                <BetInput bet={bet} setBet={setBet} disabled={loading}/>
+                <div style={{marginTop:14}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                    <label style={{fontSize:11,color:C.muted,textTransform:'uppercase',letterSpacing:1}}>Voltorbe</label>
+                    <div style={{fontSize:15,fontWeight:800,color:C.red,background:`${C.red}12`,padding:'2px 10px',borderRadius:8,border:`1px solid ${C.red}28`}}>{mines}</div>
+                  </div>
+                  <input type="range" min={1} max={24} value={mines} onChange={e=>setMines(parseInt(e.target.value))} style={{width:'100%',accentColor:C.red}}/>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:C.muted,marginTop:2}}><span>1 facile</span><span>24 extrême</span></div>
                 </div>
-                <div style={{ padding:'7px 10px', background:'rgba(109,40,217,.06)', border:'1px solid rgba(109,40,217,.12)', borderRadius:7, display:'flex', justifyContent:'space-between', marginBottom:10 }}>
-                  <span style={{ fontSize:11, color:'#5b3fa0', fontFamily:'Rajdhani,sans-serif' }}>1ère case sûre</span>
-                  <span style={{ fontFamily:'Orbitron,monospace', fontSize:12, color:'#fbbf24', fontWeight:700 }}>×{firstMult}</span>
+                <div style={{marginTop:10,padding:'8px 10px',background:C.dim,border:`1px solid ${C.border}`,borderRadius:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <span style={{fontSize:11,color:C.muted}}>1ère case sûre</span>
+                  <span style={{fontSize:13,color:C.gold,fontWeight:700}}>×{(0.92*(25/(25-mines))).toFixed(2)}</span>
                 </div>
-                {err && <div style={{ marginBottom:8, padding:'7px 10px', background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.25)', borderRadius:7, fontSize:11, color:'#f87171', fontFamily:'Exo 2,sans-serif' }}>⚠ {err}</div>}
-                <button className="btn btn-gold btn-xl" onClick={start} disabled={loading || bet<10 || bet>(user?.balance||0)}>
-                  {loading ? '⏳ DÉMARRAGE…' : phase === 'done' ? '↺ REJOUER' : '💣 COMMENCER'}
+                {err&&<div style={{marginTop:8,fontSize:11,color:C.red,background:`${C.red}10`,border:`1px solid ${C.red}25`,borderRadius:8,padding:'7px 10px'}}>⚠ {err}</div>}
+                <button onClick={start} disabled={loading||bet<10||bet>(user?.balance||0)}
+                  style={{width:'100%',marginTop:12,padding:'14px',background:loading?C.dim:C.gold,color:loading?C.muted:'#06060f',fontWeight:800,fontSize:16,borderRadius:10,border:'none',cursor:loading?'not-allowed':'pointer',opacity:loading||bet>(user?.balance||0)?.5:1,boxShadow:`0 0 20px ${C.gold}44`}}>
+                  {loading?'Démarrage…':done?'🔄 Nouvelle partie':'💣 Commencer'}
                 </button>
               </>
-            ) : (
+            ):(
               <>
-                {/* En cours */}
-                <div className="mult-display">
-                  <div className="mult-lbl">Multiplicateur</div>
-                  <div className="mult-val">×{mult}</div>
-                  {revealed.length > 0 && <div className="mult-payout">+{payout.toLocaleString('fr-FR')} ✦</div>}
+                <div style={{textAlign:'center',padding:'10px',background:C.dim,borderRadius:10,marginBottom:10}}>
+                  <div style={{fontSize:11,color:C.muted,marginBottom:4}}>Multiplicateur</div>
+                  <div style={{fontSize:30,fontWeight:900,color:C.gold}}>×{mult}</div>
+                  {revealed.length>0&&<div style={{fontSize:14,color:C.green,fontWeight:700,marginTop:2}}>{payout.toLocaleString()} jetons</div>}
                 </div>
-                <div style={{ fontSize:11, color:'#5b3fa0', textAlign:'center', marginBottom:8, fontFamily:'Exo 2,sans-serif' }}>
-                  Mise : <span style={{ color:'#fbbf24', fontFamily:'Orbitron,monospace', fontWeight:700 }}>{bet.toLocaleString('fr-FR')}</span> · <span style={{ color:'#ef4444' }}>{nMines} 💣</span>
-                </div>
-                <button
-                  className={`btn btn-xl${canCashout ? ' btn-win' : ' btn-ghost'}`}
-                  style={{ marginBottom:6 }}
-                  onClick={cashout}
-                  disabled={!canCashout}
-                >
-                  {revealed.length === 0 ? 'Retourne une case…' : `💰 ENCAISSER ${payout.toLocaleString('fr-FR')} ✦`}
+                <div style={{textAlign:'center',fontSize:11,color:C.muted,marginBottom:10}}>Mise : <span style={{color:C.gold,fontWeight:700}}>{bet.toLocaleString()}</span> · <span style={{color:C.red}}>{mines} 💣</span></div>
+                <button onClick={cashout} disabled={!canCashout}
+                  style={{width:'100%',padding:'14px',background:canCashout?'#0a2a0a':C.dim,color:canCashout?C.green:C.muted,border:`1px solid ${canCashout?C.green+'45':C.border}`,fontWeight:800,fontSize:14,borderRadius:10,cursor:canCashout?'pointer':'not-allowed',boxShadow:canCashout?`0 0 20px ${C.green}28`:'none',transition:'all .15s'}}>
+                  {revealed.length===0?'Retourne une case…':`💰 Encaisser ${payout.toLocaleString()}`}
                 </button>
-                {err && <div style={{ fontSize:11, color:'#f87171', padding:'6px 10px', background:'rgba(239,68,68,.08)', borderRadius:7, fontFamily:'Exo 2,sans-serif' }}>⚠ {err}</div>}
+                {err&&<div style={{marginTop:8,fontSize:11,color:C.red,background:`${C.red}10`,border:`1px solid ${C.red}25`,borderRadius:8,padding:'7px 10px'}}>⚠ {err}</div>}
               </>
             )}
           </div>
 
-          {/* Résultat */}
-          {outcome && (
-            <div className={`game-result${outcome==='lose'?' lose':' win'} anim-scale`} key={outcome+payout}>
-              <div className={`result-label${outcome==='lose'?' lose':' win'}`}>
-                {outcome==='lose' ? '💥 Voltorbe !' : outcome==='won' ? '🏆 Complet !' : '✅ Encaissé !'}
-              </div>
-              <div className={outcome==='lose' ? 'result-lose-amt' : 'result-win-amt'}>
-                {outcome==='lose' ? `−${bet.toLocaleString('fr-FR')}` : `+${payout.toLocaleString('fr-FR')}`}
-              </div>
-              {outcome !== 'lose' && <div className="result-mult">×{mult} · {revealed.length} case{revealed.length>1?'s':''}</div>}
+          {done&&(
+            <div style={{background:phase==='exploded'?`${C.red}08`:`${C.green}0e`,border:`1px solid ${statusCol}25`,borderRadius:12,padding:14}}>
+              <div style={{fontSize:13,fontWeight:800,color:statusCol,marginBottom:4}}>{phase==='exploded'?'💥 Voltorbe !':phase==='won'?'🏆 Grille complète !':'✅ Encaissé !'}</div>
+              <div style={{fontSize:11,color:C.muted,marginBottom:6}}>{revealed.length} cases · {mines} mines</div>
+              <div style={{fontSize:22,fontWeight:900,color:statusCol}}>{phase==='exploded'?`−${bet.toLocaleString()}`:`+${payout.toLocaleString()}`}</div>
+              <div style={{fontSize:11,color:C.muted}}>jetons</div>
             </div>
           )}
 
-          {/* Historique */}
-          {history.length > 0 && (
-            <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-              {history.map((h,i) => (
-                <div key={i} className={`chip${h.lose?' chip-lose':' chip-win'}`}>
-                  {h.lose ? `−${bet.toLocaleString('fr-FR')}` : `+${h.payout?.toLocaleString('fr-FR')}`}
-                </div>
-              ))}
+          {history.length>0&&(
+            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+              {history.map((h,i)=><div key={i} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,background:h.status==='exploded'?`${C.red}10`:`${C.green}12`,border:`1px solid ${h.status==='exploded'?C.red+'20':C.green+'28'}`,color:h.status==='exploded'?C.red:C.green}}>{h.status==='exploded'?'💥':`+${h.payout.toLocaleString()}`}</div>)}
             </div>
           )}
         </div>
 
-        {/* ── Grille ── */}
-        <div className="game-arena-panel">
-          <div style={{ textAlign:'center', marginBottom:10 }}>
-            <div style={{ fontFamily:'Orbitron,monospace', fontSize:18, fontWeight:900, color:'#10b981', letterSpacing:4 }}>MINES</div>
-            <div style={{ fontSize:11, color:'#5b3fa0', fontFamily:'Rajdhani,sans-serif' }}>Grille 5×5 · Évite les Voltorbe · Encaisse quand tu veux</div>
+        {/* CENTRE — Grille */}
+        <div style={{flex:1,background:C.surf,border:`1px solid ${C.border}`,borderRadius:18,padding:24,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
+          <div style={{textAlign:'center'}}><div style={{fontSize:22,fontWeight:900,color:C.gold,letterSpacing:4}}>MINES</div><div style={{fontSize:11,color:C.muted,marginTop:3}}>Grille 5×5 · Évite les Voltorbe · Encaisse quand tu veux</div></div>
+          <div style={{background:'#07070f',border:`1px solid ${C.border}`,borderRadius:16,padding:18}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5,62px)',gap:8,justifyContent:'center'}}>
+              {Array.from({length:25},(_,i)=><Cell key={i} i={i} state={cellState(i)} onClick={reveal} disabled={!playing||loading}/>)}
+            </div>
           </div>
-
-          <div className="mines-grid" style={{ flex:1 }}>
-            {Array.from({length:25},(_,i) => (
-              <Cell
-                key={i} idx={i} state={cellState(i)}
-                onClick={reveal}
-                disabled={phase !== 'playing' || loading}
-              />
-            ))}
-          </div>
-
-          {playing && revealed.length > 0 && (
-            <div style={{ marginTop:10, textAlign:'center' }}>
-              <div style={{ display:'inline-flex', alignItems:'center', gap:14, padding:'8px 20px', background:'rgba(251,191,36,.06)', border:'1px solid rgba(251,191,36,.2)', borderRadius:10 }}>
-                <span style={{ fontSize:12, color:'#5b3fa0', fontFamily:'Exo 2,sans-serif' }}>{revealed.length} case{revealed.length>1?'s':''}</span>
-                <span style={{ fontFamily:'Orbitron,monospace', fontSize:22, fontWeight:900, color:'#fbbf24' }}>×{mult}</span>
-                <span style={{ fontFamily:'Orbitron,monospace', fontSize:16, fontWeight:700, color:'#10b981' }}>{payout.toLocaleString('fr-FR')} ✦</span>
-              </div>
+          {playing&&revealed.length>0&&(
+            <div style={{display:'flex',alignItems:'center',gap:16,padding:'10px 20px',background:`${C.gold}0a`,border:`1px solid ${C.gold}22`,borderRadius:12}}>
+              <div style={{fontSize:11,color:C.muted}}>{revealed.length} case{revealed.length>1?'s':''}</div>
+              <div style={{fontSize:22,fontWeight:900,color:C.gold}}>×{mult}</div>
+              <div style={{fontSize:16,fontWeight:700,color:C.green}}>{payout.toLocaleString()} jetons</div>
             </div>
           )}
-
-          {phase === 'idle' && (
-            <div style={{ textAlign:'center', color:'#5b3fa0', fontSize:13, fontFamily:'Exo 2,sans-serif', marginTop:10 }}>
-              Configure ta mise et appuie sur Commencer !
+          {phase==='idle'&&<div style={{fontSize:12,color:C.muted}}>Configure ta mise et lance !</div>}
+          {history.length>0&&(
+            <div style={{display:'flex',gap:5,flexWrap:'wrap',justifyContent:'center'}}>
+              {history.map((h,i)=><div key={i} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:20,background:h.status==='exploded'?`${C.red}10`:`${C.green}12`,border:`1px solid ${h.status==='exploded'?C.red+'20':C.green+'28'}`,color:h.status==='exploded'?C.red:C.green}}>{h.status==='exploded'?'💥':`+${h.payout.toLocaleString()}`}</div>)}
             </div>
           )}
         </div>
 
-        {/* ── Règles ── */}
-        <div className="game-rules-panel">
-          <div style={{ fontFamily:'Orbitron,monospace', fontSize:9, color:'#5b3fa0', letterSpacing:2, textTransform:'uppercase', marginBottom:10 }}>
-            Comment jouer
-          </div>
-          {[
-            { icon:'🪙', title:'Retourne des cases', desc:'pour trouver des jetons' },
-            { icon:'💰', title:'Encaisse quand tu veux', desc:'le gain est sécurisé' },
-            { icon:'💥', title:'Un Voltorbe touché', desc:'= tout est perdu' },
-            { icon:'📈', title:'Plus de mines', desc:'= meilleur multiplicateur' },
-            { icon:'🏆', title:'Toutes les cases sûres', desc:'= victoire totale' },
-          ].map(({ icon, title, desc }) => (
-            <div key={title} style={{ display:'flex', gap:8, alignItems:'flex-start', padding:'7px 0', borderBottom:'1px solid rgba(109,40,217,.08)' }}>
-              <span style={{ fontSize:16, flexShrink:0 }}>{icon}</span>
-              <div>
-                <div style={{ fontFamily:'Rajdhani,sans-serif', fontSize:12, fontWeight:700, color:'#c4b5fd', marginBottom:2 }}>{title}</div>
-                <div style={{ fontFamily:'Exo 2,sans-serif', fontSize:10, color:'#5b3fa0', lineHeight:1.4 }}>{desc}</div>
-              </div>
+        {/* DROITE — Règles */}
+        <div style={{width:220,flexShrink:0,background:C.surf,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>Règles</div>
+          {[{icon:'🪙',t:'Retourne des cases',d:'pour trouver des jetons'},{icon:'💰',t:'Encaisse quand tu veux',d:'le gain est sécurisé'},{icon:'💥',t:'Un Voltorbe touché',d:'= tout est perdu, 0 jetons'},{icon:'📈',t:'Plus de mines',d:'= multiplicateurs plus élevés'},{icon:'🏆',t:'Toutes les cases sûres',d:'= jackpot maximum'}].map(({icon,t,d})=>(
+            <div key={t} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'7px 0',borderBottom:`1px solid ${C.dim}`}}>
+              <span style={{fontSize:14,flexShrink:0}}>{icon}</span>
+              <div><div style={{fontSize:11,fontWeight:700,color:C.txt}}>{t}</div><div style={{fontSize:10,color:C.muted,marginTop:1}}>{d}</div></div>
             </div>
           ))}
-
-          <hr className="sep" />
-          <div style={{ fontFamily:'Orbitron,monospace', fontSize:9, color:'#5b3fa0', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>
-            Multiplicateurs
-          </div>
-          {[1,3,5,10,15,20].map(m => {
-            const calcMult = (n) => parseFloat((Math.pow(25/(25-n), m > 20 ? 20 : m) * 0.92).toFixed(2))
-            return (
-              <div key={m} style={{ display:'flex', justifyContent:'space-between', fontSize:11, padding:'4px 0', borderBottom:'1px solid rgba(109,40,217,.06)' }}>
-                <span style={{ color:'#5b3fa0', fontFamily:'Rajdhani,sans-serif' }}>{m} mines, {m} cases</span>
-                <span style={{ fontFamily:'Orbitron,monospace', color:'#fbbf24', fontWeight:700, fontSize:10 }}>×{calcMult(m)}</span>
-              </div>
-            )
-          })}
         </div>
       </div>
+      <LiveFeed/>
     </div>
   )
 }

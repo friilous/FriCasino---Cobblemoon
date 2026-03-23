@@ -1,135 +1,300 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
-import { getRankFromWagered, getNextRank, getXPProgress } from '../utils/ranks'
 
-const GAMES = [
-  { id:'slots',     to:'/casino/slots',     icon:'🎰', name:'Slot Machine',    sub:'Jackpot jusqu\'à ×261',   color:'#fbbf24', badge:'HOT' },
-  { id:'blackjack', to:'/casino/blackjack', icon:'🃏', name:'Blackjack',        sub:'Blackjack naturel ×2.2', color:'#60a5fa' },
-  { id:'mines',     to:'/casino/mines',     icon:'💣', name:'Mines',            sub:'Encaisse quand tu veux',  color:'#10b981' },
-  { id:'roulette',  to:'/casino/roulette',  icon:'🎡', name:'Roulette Pokémon', sub:'Légendaire = ×14',        color:'#a78bfa' },
-  { id:'plinko',    to:'/casino/plinko',    icon:'⚪', name:'Plinko',           sub:'Jackpot ×37.5 risque max',color:'#f472b6' },
+const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎯', crash: '📈', blackjack: '🃏', mines: '💣' }
+
+const INFO_STEPS = [
+  {
+    icon: '🎮',
+    title: 'Joue sur Cobblemon',
+    desc: 'Gagne des Pokédollars en jeu sur le serveur CobbleMoon.',
+    color: '#40f080',
+  },
+  {
+    icon: '💬',
+    title: 'Contacte Frilous',
+    desc: 'Envoie tes Pokédollars à Frilous en jeu. Il crédite ton compte en jetons (1 jeton = 1 ₽).',
+    color: '#f0c040',
+  },
+  {
+    icon: '🎰',
+    title: 'Joue au casino',
+    desc: 'Mise tes jetons sur les machines disponibles. Mise min 10, max 10 000 jetons.',
+    color: '#c040f0',
+  },
+  {
+    icon: '💸',
+    title: 'Retire tes gains',
+    desc: 'Demande un retrait depuis ton profil. Frilous te verse les Pokédollars en jeu.',
+    color: '#4080f0',
+  },
+]
+
+const RULES = [
+  { label: 'Mise minimum',    value: '10 jetons',        icon: '⬇️' },
+  { label: 'Mise maximum',    value: '10 000 jetons',    icon: '⬆️' },
+  { label: 'Retrait minimum', value: '100 jetons',       icon: '💸' },
+  { label: 'Retrait max/jour','value': 'Illimité',       icon: '✅' },
+  { label: 'Support',         value: '.Frilous (Discord)', icon: '💬' },
+  { label: 'Problème ?',      value: 'Contact Frilous, pas le staff', icon: '⚠️' },
 ]
 
 export default function Casino() {
   const { user } = useAuth()
-  const { gameSettings } = useSocket()
-  const navigate = useNavigate()
-  const [bonus, setBonus]   = useState(false)
-  const [jp,    setJp]      = useState(null)
-
-  const rank     = user?.total_wagered !== undefined ? getRankFromWagered(user.total_wagered) : null
-  const nextRank = rank ? getNextRank(rank.id) : null
-  const xp       = rank && nextRank ? getXPProgress(user?.total_wagered||0, rank, nextRank) : 100
+  const { liveFeed, gameSettings } = useSocket()
+  const [bonusAvailable, setBonusAvailable] = useState(false)
 
   useEffect(() => {
     if (!user) return
-    axios.get('/api/wheel').then(r => setBonus(r.data.can_spin)).catch(() => {})
-    axios.get('/api/superjackpot').then(r => setJp(r.data.amount)).catch(() => {})
+    axios.get('/api/wheel')
+      .then(r => setBonusAvailable(r.data.can_spin))
+      .catch(() => {})
   }, [user])
 
-  const hour = new Date().getHours()
-  const greet = hour < 6 ? 'Bonne nuit' : hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'
+  const activeGames = Object.entries(gameSettings).filter(([, v]) => v).length
+  const totalGames  = Object.keys(gameSettings).length
 
   return (
-    <div className="page" style={{ display:'flex', flexDirection:'column', gap:12 }}>
+    <div style={{ padding: '24px 28px', minHeight: '100vh', background: '#07071a' }}>
 
-      {/* Bonus banner */}
-      {bonus && (
-        <Link to="/roue-du-jour" style={{ textDecoration:'none' }}>
-          <div className="bonus-banner">
-            <div className="bb-icon">🎁</div>
-            <div>
-              <div className="bb-title">Coffre du Jour disponible !</div>
-              <div className="bb-sub">Jusqu'à 50 000 jetons gratuits — expire à minuit</div>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#d8d8f0', margin: '0 0 4px' }}>
+          Bienvenue, <span style={{ color: '#f0c040' }}>{user?.username}</span> 👋
+        </h1>
+        <p style={{ fontSize: 12, color: '#44446a', margin: 0 }}>
+          Casino indépendant pour le serveur Minecraft <span style={{ color: '#9898b8' }}>CobbleMoon</span>
+        </p>
+      </div>
+
+      {/* Bonus du jour disponible */}
+      {bonusAvailable && (
+        <Link to="/roue-du-jour" style={{ textDecoration: 'none', display: 'block', marginBottom: 16 }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #1a1200, #0f0f28)',
+            border: '1px solid #f0c04050',
+            borderRadius: 12, padding: '14px 20px',
+            display: 'flex', alignItems: 'center', gap: 14,
+            cursor: 'pointer', transition: 'all .2s',
+            boxShadow: '0 0 20px rgba(240,192,64,0.08)',
+            animation: 'pulse-border 2s ease-in-out infinite',
+          }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = '#f0c04099'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = '#f0c04050'}
+          >
+            <div style={{
+              width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+              background: 'linear-gradient(135deg, #f0c04025, #f0c04010)',
+              border: '1px solid #f0c04040',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 22, animation: 'float 2.5s ease-in-out infinite',
+            }}>
+              🎁
             </div>
-            <button className="bb-cta">Ouvrir →</button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#f0c040', marginBottom: 2 }}>
+                Ton bonus du jour est disponible !
+              </div>
+              <div style={{ fontSize: 11, color: '#5a5a8a' }}>
+                Récupère jusqu'à <span style={{ color: '#ffd700', fontWeight: 700 }}>10 000 jetons</span> gratuitement (ou plus...) — offre valable jusqu'à minuit
+              </div>
+            </div>
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: '#07071a',
+              background: '#f0c040', borderRadius: 8, padding: '7px 16px', flexShrink: 0,
+              boxShadow: '0 0 12px #f0c04060',
+            }}>
+              Récupérer →
+            </div>
           </div>
+          <style>{`@keyframes pulse-border { 0%,100%{box-shadow:0 0 20px rgba(240,192,64,0.08)} 50%{box-shadow:0 0 30px rgba(240,192,64,0.18)} }`}</style>
         </Link>
       )}
 
-      {/* Welcome + Stats */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:12, alignItems:'start' }}>
-        <div>
-          <div style={{ fontFamily:'Exo 2,sans-serif', fontSize:12, color:'#5b3fa0', marginBottom:2 }}>{greet},</div>
-          <div style={{ fontFamily:'Orbitron,monospace', fontSize:18, fontWeight:900, color:'#e2d4f0', marginBottom:4 }}>
-            <span style={{ color:'#a78bfa' }}>{user?.username}</span> 👋
-          </div>
-          {rank && nextRank && (
-            <div style={{ maxWidth:280 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'#5b3fa0', marginBottom:4, fontFamily:'Rajdhani,sans-serif' }}>
-                <span>{rank.icon} {rank.name}</span>
-                <span>→ {nextRank.icon} {nextRank.name}</span>
-              </div>
-              <div className="xp-track"><div className="xp-fill" style={{ width:`${xp}%`, background:`linear-gradient(90deg,${rank.color}99,${rank.color})` }} /></div>
-              <div style={{ fontSize:9, color:'#5b3fa0', marginTop:3, fontFamily:'Orbitron,monospace' }}>
-                {(user?.total_wagered||0).toLocaleString('fr-FR')} / {nextRank.threshold.toLocaleString('fr-FR')} ✦
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="stat-grid" style={{ gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-          <div className="stat-card gold">
-            <div className="sv">{(user?.balance||0).toLocaleString('fr-FR')}</div>
-            <div className="sl">Solde ✦</div>
-          </div>
-          <div className="stat-card pink">
-            <div className="sv">{jp !== null ? jp.toLocaleString('fr-FR') : '—'}</div>
-            <div className="sl">Jackpot</div>
-          </div>
-          <div className="stat-card" style={{ '--accent': rank?.color }}>
-            <div className="sv" style={{ color: rank?.color || '#a78bfa', fontSize:13 }}>{rank?.icon} {rank?.name}</div>
-            <div className="sl">Rang actuel</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Grille jeux */}
-      <div>
-        <div style={{ fontFamily:'Orbitron,monospace', fontSize:10, color:'#5b3fa0', letterSpacing:2, textTransform:'uppercase', marginBottom:10 }}>
-          Les machines
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:8 }}>
-          {GAMES.map(g => {
-            const enabled = gameSettings[g.id] !== false
-            return (
-              <Link key={g.id} to={enabled ? g.to : '#'} style={{ textDecoration:'none' }}>
-                <div
-                  className="game-tile"
-                  style={{ '--accent': g.color, opacity: enabled ? 1 : .45, cursor: enabled ? 'pointer' : 'not-allowed', padding:'12px 10px', textAlign:'center' }}
-                >
-                  {g.badge && enabled && <div className="gt-badge">{g.badge}</div>}
-                  {!enabled && <div className="gt-badge" style={{ background:'rgba(107,114,128,.2)', color:'#6b7280', borderColor:'rgba(107,114,128,.3)' }}>OFF</div>}
-                  <div className="gt-icon" style={{ fontSize:30, margin:'0 0 8px' }}>{g.icon}</div>
-                  <div className="gt-name" style={{ fontSize:12 }}>{g.name}</div>
-                  <div className="gt-sub" style={{ fontSize:10, marginTop:3 }}>{g.sub}</div>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
+      {/* Bannière statut */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20,
+      }}>
+        <StatCard icon="🪙" label="Ton solde" value={`${(user?.balance || 0).toLocaleString()} jetons`} color="#f0c040" />
+        <StatCard icon="🎮" label="Machines actives" value={`${activeGames} / ${totalGames}`} color="#40f080" />
+        <StatCard icon="🎯" label="Mise max jackpot" value="×190 ta mise" color="#c040f0" />
       </div>
 
       {/* Comment ça marche */}
-      <div className="card" style={{ padding:'12px 14px' }}>
-        <div style={{ fontFamily:'Orbitron,monospace', fontSize:10, color:'#5b3fa0', letterSpacing:2, marginBottom:10, textTransform:'uppercase' }}>Comment jouer ?</div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10 }}>
-          {[
-            { icon:'🎮', title:'Gagne des Pokédollars', desc:'En jouant sur CobbleMoon.' },
-            { icon:'💬', title:'Échange avec Frilous', desc:'1 jeton = 1 Pokédollar.' },
-            { icon:'🎰', title:'Joue au casino', desc:'Mise min 10 ✦, max selon rang.' },
-            { icon:'💸', title:'Retire tes gains', desc:'Frilous te reverse en jeu.' },
-          ].map(({ icon, title, desc }) => (
-            <div key={title} style={{ background:'rgba(109,40,217,.05)', border:'1px solid rgba(109,40,217,.1)', borderRadius:9, padding:'10px 10px' }}>
-              <div style={{ fontSize:20, marginBottom:6 }}>{icon}</div>
-              <div style={{ fontFamily:'Rajdhani,sans-serif', fontSize:12, fontWeight:700, color:'#c4b5fd', marginBottom:3 }}>{title}</div>
-              <div style={{ fontFamily:'Exo 2,sans-serif', fontSize:11, color:'#5b3fa0', lineHeight:1.4 }}>{desc}</div>
+      <div style={{
+        background: '#0a0a20', border: '1px solid #1e1e40',
+        borderRadius: 12, padding: '18px 20px', marginBottom: 20,
+      }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: '0 0 16px' }}>
+          🚀 Comment jouer
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          {INFO_STEPS.map((step, i) => (
+            <div key={i} style={{
+              background: '#07071a', border: '1px solid #1e1e40',
+              borderRadius: 10, padding: '14px 12px', position: 'relative',
+            }}>
+              <div style={{
+                position: 'absolute', top: 10, right: 10,
+                width: 18, height: 18, borderRadius: '50%',
+                background: step.color + '20', border: `1px solid ${step.color}50`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 9, color: step.color, fontWeight: 800,
+              }}>
+                {i + 1}
+              </div>
+              <div style={{ fontSize: 24, marginBottom: 8 }}>{step.icon}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: step.color, marginBottom: 4 }}>
+                {step.title}
+              </div>
+              <div style={{ fontSize: 10, color: '#44446a', lineHeight: 1.5 }}>{step.desc}</div>
             </div>
           ))}
         </div>
       </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+        {/* Règles & infos */}
+        <div style={{
+          background: '#0a0a20', border: '1px solid #1e1e40',
+          borderRadius: 12, padding: '18px 20px',
+        }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: '0 0 14px' }}>
+            📋 Règles & Limites
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {RULES.map((r, i) => (
+              <div key={i} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '7px 0',
+                borderBottom: i < RULES.length - 1 ? '1px solid #12122a' : 'none',
+              }}>
+                <span style={{ fontSize: 11, color: '#5a5a8a' }}>
+                  {r.icon} {r.label}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#d8d8f0' }}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{
+            marginTop: 14, padding: '10px 12px',
+            background: 'rgba(240,192,64,0.05)', border: '1px solid rgba(240,192,64,0.12)',
+            borderRadius: 8, fontSize: 10, color: '#555540', lineHeight: 1.6,
+          }}>
+            ⚠️ Projet indépendant de Frilous — sans lien avec le staff CobbleMoon.
+            En cas de problème, contactez <span style={{ color: '#f0c040' }}>Frilous</span> uniquement.
+          </div>
+
+          {/* Bouton accès machines */}
+          <Link to="/machines" style={{ textDecoration: 'none', display: 'block', marginTop: 14 }}>
+            <div style={{
+              background: '#f0c040', color: '#07071a',
+              fontWeight: 800, fontSize: 13, padding: '11px',
+              borderRadius: 8, textAlign: 'center',
+              cursor: 'pointer',
+            }}>
+              🎰 Accéder aux machines →
+            </div>
+          </Link>
+        </div>
+
+        {/* Live feed */}
+        <div style={{
+          background: '#0a0a20', border: '1px solid #1e1e40',
+          borderRadius: 12, padding: '18px 20px',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+          }}>
+            <div style={{
+              width: 7, height: 7, borderRadius: '50%', background: '#40f080',
+              animation: 'pulse-dot 1.4s ease-in-out infinite',
+            }} />
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: 0 }}>
+              Activité en direct
+            </h2>
+          </div>
+
+          {liveFeed.length === 0 ? (
+            <div style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#2e2e55', fontSize: 12,
+            }}>
+              Aucune activité — sois le premier !
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {liveFeed.slice(0, 10).map((e, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '7px 10px',
+                  background: '#07071a',
+                  borderRadius: 7,
+                  border: e.payout > e.bet * 3 ? '1px solid rgba(240,192,64,0.2)' : '1px solid #12122a',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14 }}>{GAME_ICONS[e.game] || '🎲'}</span>
+                    <div>
+                      <span style={{
+                        fontSize: 11, fontWeight: 600, color: '#c8c8e8',
+                        cursor: 'pointer',
+                      }}>
+                        {e.username}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#44446a', marginLeft: 6 }}>
+                        mise {e.bet?.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{
+                      fontSize: 12, fontWeight: 700,
+                      color: e.payout > e.bet ? '#40f080' : '#f06060',
+                    }}>
+                      {e.payout > e.bet
+                        ? `+${e.payout.toLocaleString()}`
+                        : `-${e.bet?.toLocaleString()}`}
+                    </div>
+                    {e.bet_id && (
+                      <div style={{ fontSize: 9, color: '#2e2e50' }}>{e.bet_id}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Link to="/classement" style={{
+            textDecoration: 'none', marginTop: 12,
+            display: 'block', textAlign: 'center',
+            fontSize: 11, color: '#44446a',
+            padding: '8px',
+            borderTop: '1px solid #12122a',
+          }}>
+            🏆 Voir le classement →
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatCard({ icon, label, value, color }) {
+  return (
+    <div style={{
+      background: '#0a0a20', border: `1px solid ${color}22`,
+      borderRadius: 10, padding: '12px 16px',
+    }}>
+      <div style={{ fontSize: 9, color: '#44446a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+        {icon} {label}
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
     </div>
   )
 }

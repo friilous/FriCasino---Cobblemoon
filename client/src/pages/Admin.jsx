@@ -1,401 +1,892 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { Link } from 'react-router-dom'
 import { useSocket } from '../contexts/SocketContext'
 
-// Crash retiré proprement
-const GAMES = [
-  { id: 'slots',     name: 'Slot Machine',     icon: '🎰' },
-  { id: 'blackjack', name: 'Blackjack',         icon: '🃏' },
-  { id: 'mines',     name: 'Mines',             icon: '💣' },
-  { id: 'roulette',  name: 'Roulette Pokémon',  icon: '🎡' },
-  { id: 'plinko',    name: 'Plinko',            icon: '⚪' },
+const GAMES_LIST = [
+  { id: 'slots',     label: 'Slot Machine',     icon: '🎰' },
+  { id: 'roulette',  label: 'Roulette Pokémon', icon: '🎯' },
+  { id: 'crash',     label: 'Crash',            icon: '📈' },
+  { id: 'blackjack', label: 'Blackjack',        icon: '🃏' },
+  { id: 'mines',     label: 'Mines',            icon: '💣' },
+  { id: 'plinko',    label: 'Plinko',           icon: '🪀' },
 ]
 
-const STATUS_COLS  = { pending: '#F0B429', approved: '#22C55E', rejected: '#EF4444' }
-const STATUS_LABELS= { pending: '⏳ En attente', approved: '✅ Approuvé', rejected: '❌ Refusé' }
-const TABS = ['overview','users','withdrawals','settings','jackpot','actions']
-const TAB_LABELS = { overview:'📊 Vue d\'ensemble', users:'👥 Joueurs', withdrawals:'💸 Retraits', settings:'⚙️ Jeux', jackpot:'💎 Jackpot', actions:'🔧 Actions' }
+const BET_FILTERS = [
+  { id: 'all',      label: 'Tous' },
+  { id: 'wins',     label: '✅ Gains' },
+  { id: 'losses',   label: '❌ Pertes' },
+  { id: 'big_wins', label: '🔥 Gros gains (×2+)' },
+]
 
 export default function Admin() {
-  const { socket } = useSocket()
-  const [tab,      setTab]      = useState('overview')
-  const [stats,    setStats]    = useState(null)
-  const [users,    setUsers]    = useState([])
-  const [wds,      setWds]      = useState([])
-  const [games,    setGames]    = useState({})
-  const [jackpot,  setJackpot]  = useState(null)
-  const [newAmount,setNewAmount]= useState('')
-  const [loading,  setLoading]  = useState(false)
-  const [msg,      setMsg]      = useState('')
-  const [err,      setErr]      = useState('')
-  const [search,   setSearch]   = useState('')
-  const [selUser,  setSelUser]  = useState(null)
-  const [credits,  setCredits]  = useState('')
-  const [newPw,    setNewPw]    = useState('')
+  const [tab,          setTab]          = useState('stats')
+  const [users,        setUsers]        = useState([])
+  const [withdrawals,  setWithdrawals]  = useState([])
+  const [stats,        setStats]        = useState(null)
+  const [gameSettings, setGameSettings] = useState({})
+  const [bets,         setBets]         = useState([])
+  const [betsTotal,    setBetsTotal]    = useState(0)
+  const [betsFilter,   setBetsFilter]   = useState('all')
+  const [betsGame,     setBetsGame]     = useState('')
+  const [betsSearch,   setBetsSearch]   = useState('')
+  const [betsPage,     setBetsPage]     = useState(0)
+  const [betsLoading,  setBetsLoading]  = useState(false)
+  const [playerModal,  setPlayerModal]  = useState(null)
+  const [playerData,   setPlayerData]   = useState(null)
+  // ── NextLeg ──
+  const [nextlegUsers,   setNextlegUsers]   = useState([])
+  const [nextlegLoading, setNextlegLoading] = useState(false)
+  const [, setTick] = useState(0) // force re-render pour timeSince
 
-  function flash(m, isErr = false) {
-    if (isErr) { setErr(m); setTimeout(() => setErr(''), 4000) }
-    else        { setMsg(m); setTimeout(() => setMsg(''), 4000) }
-  }
+  const { liveFeed, socket } = useSocket()
+
+  const LIMIT = 50
 
   useEffect(() => { loadAll() }, [])
+
   useEffect(() => {
-    if (!socket) return
-    socket.on('new_withdrawal', (w) => setWds(prev => [w, ...prev]))
-    return () => socket.off('new_withdrawal')
-  }, [socket])
+    if (tab === 'bets') loadBets()
+  }, [tab, betsFilter, betsGame, betsPage])
+
+  useEffect(() => {
+    if (tab === 'nextleg') loadNextlegUsers()
+  }, [tab])
+
+  // Polling toutes les 20s sur l'onglet NextLeg (fallback si socket pas dispo)
+  useEffect(() => {
+    if (tab !== 'nextleg') return
+    const interval = setInterval(() => loadNextlegUsers(), 20000)
+    return () => clearInterval(interval)
+  }, [tab])
+
+  // Rafraîchit "Dernière vue" toutes les 30s
+  useEffect(() => {
+    if (tab !== 'nextleg') return
+    const interval = setInterval(() => setTick(t => t + 1), 30000)
+    return () => clearInterval(interval)
+  }, [tab])
 
   async function loadAll() {
-    setLoading(true)
+    loadUsers(); loadWithdrawals(); loadStats(); loadGameSettings()
+  }
+
+  async function loadGameSettings() {
     try {
-      const [s, u, w, g, jk] = await Promise.all([
-        axios.get('/api/admin/stats'),
-        axios.get('/api/admin/users'),
-        axios.get('/api/admin/withdrawals'),
-        axios.get('/api/admin/game-settings'),
-        axios.get('/api/superjackpot'),
-      ])
-      setStats(s.data)
-      setUsers(u.data)
-      setWds(w.data)
-      setGames(g.data)
-      setJackpot(jk.data.amount)
-    } catch { flash('Erreur chargement', true) }
-    setLoading(false)
+      const { data } = await axios.get('/api/admin/game-settings')
+      setGameSettings(data)
+    } catch {}
   }
 
-  async function toggleGame(id, cur) {
+  async function toggleGame(game) {
+    const newVal = !gameSettings[game]
+    setGameSettings(prev => ({ ...prev, [game]: newVal }))
     try {
-      await axios.post('/api/admin/game-settings', { game: id, enabled: !cur })
-      setGames(prev => ({ ...prev, [id]: !cur }))
-      flash(`${id} ${!cur ? 'activé ✅' : 'désactivé 🔴'}`)
-    } catch { flash('Erreur', true) }
+      await axios.put(`/api/admin/game-settings/${game}`, { enabled: newVal })
+    } catch {
+      setGameSettings(prev => ({ ...prev, [game]: !newVal }))
+    }
   }
 
-  async function handleWithdraw(id, status, note = '') {
+  async function loadUsers() {
+    try { const { data } = await axios.get('/api/admin/users'); setUsers(data) } catch {}
+  }
+
+  async function loadWithdrawals() {
+    try { const { data } = await axios.get('/api/admin/withdrawals'); setWithdrawals(data) } catch {}
+  }
+
+  async function loadStats() {
+    try { const { data } = await axios.get('/api/admin/stats'); setStats(data) } catch {}
+  }
+
+  async function loadBets() {
+    setBetsLoading(true)
     try {
-      await axios.put(`/api/admin/withdrawals/${id}`, { status, admin_note: note })
-      setWds(prev => prev.map(w => w.id === id ? { ...w, status, admin_note: note } : w))
-      flash(`Retrait ${status === 'approved' ? 'approuvé ✅' : 'refusé ❌'}`)
-    } catch { flash('Erreur', true) }
+      const params = { filter: betsFilter, limit: LIMIT, offset: betsPage * LIMIT }
+      if (betsGame) params.game = betsGame
+      if (betsSearch) params.search = betsSearch
+      const { data } = await axios.get('/api/admin/bets', { params })
+      setBets(data.bets); setBetsTotal(data.total)
+    } catch {}
+    setBetsLoading(false)
   }
 
-  async function creditUser(userId, amount, desc) {
+  async function loadNextlegUsers() {
+    setNextlegLoading(true)
     try {
-      await axios.post('/api/admin/credit', { userId, amount, description: desc })
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, balance: u.balance + parseInt(amount) } : u))
-      flash(`+${parseInt(amount).toLocaleString('fr-FR')} crédités ✅`)
-      setCredits('')
-    } catch { flash('Erreur', true) }
+      const { data } = await axios.get('/api/admin/nextleg-users')
+      setNextlegUsers(data)
+    } catch {}
+    setNextlegLoading(false)
   }
 
-  async function resetPassword(userId, pw) {
+  async function openPlayerModal(user) {
+    setPlayerModal(user); setPlayerData(null)
     try {
-      await axios.post('/api/admin/reset-password', { userId, newPassword: pw })
-      flash('Mot de passe réinitialisé ✅')
-      setNewPw('')
-    } catch { flash('Erreur', true) }
+      const { data } = await axios.get(`/api/admin/players/${user.id}/history`, { params: { limit: 20 } })
+      setPlayerData(data)
+    } catch {}
   }
 
-  async function updateJackpot() {
-    const n = parseInt(newAmount)
-    if (!n || n < 0) return
-    try {
-      await axios.post('/api/admin/jackpot', { amount: n })
-      setJackpot(n); setNewAmount(''); flash(`Jackpot mis à jour : ${n.toLocaleString('fr-FR')} ✅`)
-    } catch { flash('Erreur', true) }
-  }
+  useEffect(() => {
+    if (!socket) return
+    socket.on('new_withdrawal', () => { loadWithdrawals() })
+    socket.on('nextleg_ping', (updatedUser) => {
+      setNextlegUsers(prev => {
+        const exists = prev.find(u => u.uid === updatedUser.uid)
+        if (exists) return prev.map(u => u.uid === updatedUser.uid ? updatedUser : u)
+        return [updatedUser, ...prev]
+      })
+    })
+    socket.on('nextleg_new_user', () => loadNextlegUsers())
+    return () => {
+      socket.off('new_withdrawal')
+      socket.off('nextleg_ping')
+      socket.off('nextleg_new_user')
+    }
+  }, [socket])
 
-  async function triggerDraw() {
-    if (!confirm('Déclencher le tirage du SuperJackpot MAINTENANT ?')) return
-    try {
-      const { data } = await axios.post('/api/superjackpot/draw')
-      flash(data.result === 'no_eligible' ? 'Aucun joueur éligible' : `🏆 Gagnant : ${data.winner} — ${data.amount_won?.toLocaleString('fr-FR')} jetons !`)
-      loadAll()
-    } catch { flash('Erreur tirage', true) }
-  }
-
-  const filteredUsers = users.filter(u => u.username.toLowerCase().includes(search.toLowerCase()))
-  const pendingWds    = wds.filter(w => w.status === 'pending')
-
-  const inputSt = {
-    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(240,180,41,0.2)',
-    borderRadius: 8, padding: '8px 12px', color: '#F5E6C8',
-    fontFamily: 'Crimson Pro, serif', fontSize: 13, outline: 'none',
-  }
-  const btnGold = {
-    fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: 11, cursor: 'pointer',
-    background: 'linear-gradient(135deg,#FFD700,#F0B429)', color: '#1A0A00',
-    padding: '8px 16px', borderRadius: 8, border: 'none',
-    boxShadow: '0 2px 10px rgba(240,180,41,0.3)',
-  }
+  const pendingCount = withdrawals.filter(w => w.status === 'pending').length
+  const totalPages   = Math.ceil(betsTotal / LIMIT)
 
   return (
-    <div style={{ padding: '28px 32px', minHeight: '100%', boxSizing: 'border-box' }}>
+    <div style={{ padding: '24px 28px', minHeight: '100vh', background: '#07071a' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontFamily: 'Cinzel Decorative, serif', fontSize: 20, fontWeight: 900, color: '#F5E6C8', margin: 0 }}>
-            ⚙️ Panel Admin
-          </h1>
-          <p style={{ fontFamily: 'Crimson Pro, serif', fontSize: 13, color: 'rgba(245,230,200,0.35)', marginTop: 4 }}>
-            CobbleMoon Casino — Frilous uniquement
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#d8d8f0', margin: 0 }}>⚙️ Panel Admin</h1>
+          <button onClick={loadAll} style={{
+            background: 'transparent', border: '1px solid #2a2a4a',
+            color: '#9898b8', padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
+          }}>🔄 Actualiser</button>
         </div>
-        {pendingWds.length > 0 && (
-          <div style={{ background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 10, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F0B429', animation: 'pulseDot 1.2s ease-in-out infinite' }} />
-            <span style={{ fontFamily: 'Cinzel, serif', fontSize: 12, color: '#F0B429', fontWeight: 700 }}>
-              {pendingWds.length} retrait{pendingWds.length > 1 ? 's' : ''} en attente
-            </span>
+
+        {/* Stats rapides */}
+        {stats && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
+            {[
+              { label: 'Joueurs',          value: stats.totalPlayers,                  icon: '👤', color: '#d8d8f0' },
+              { label: 'Jetons circulants', value: stats.totalBalance?.toLocaleString(), icon: '🪙', color: '#f0c040' },
+              { label: 'Parties jouées',   value: stats.gamesPlayed?.toLocaleString(),  icon: '🎮', color: '#d8d8f0' },
+              { label: 'Profit maison',    value: stats.houseProfit?.toLocaleString(),  icon: '💰', color: '#40f080' },
+              { label: 'House edge réel',  value: `${stats.houseEdge}%`,               icon: '📊', color: '#f0c040' },
+            ].map(s => (
+              <div key={s.label} style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 10, padding: '12px 14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: 9, color: '#44446a', marginTop: 2 }}>{s.label}</div>
+              </div>
+            ))}
           </div>
+        )}
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid #1e1e40', paddingBottom: 10, flexWrap: 'wrap' }}>
+          {[
+            { id: 'stats',       label: '📊 Stats' },
+            { id: 'machines',    label: '🎮 Machines' },
+            { id: 'users',       label: `👤 Joueurs (${users.length})` },
+            { id: 'create',      label: '➕ Créer compte' },
+            { id: 'withdrawals', label: `💸 Retraits${pendingCount > 0 ? ` (${pendingCount})` : ''}` },
+            { id: 'bets',        label: '🎲 Tous les paris' },
+            { id: 'live',        label: '📺 Live' },
+            { id: 'nextleg',     label: `🟢 Mod NextLeg${nextlegUsers.length > 0 ? ` (${nextlegUsers.length})` : ''}` },
+            { id: 'reset',       label: '🗑️ Reset données' },
+          ].map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', border: 'none',
+              background: tab === t.id ? 'rgba(240,192,64,0.12)' : 'transparent',
+              color: tab === t.id ? '#f0c040' : '#5a5a8a',
+            }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'stats'       && <StatsTab stats={stats} />}
+        {tab === 'machines'    && <MachinesTab gameSettings={gameSettings} toggleGame={toggleGame} />}
+        {tab === 'users'       && <UsersTab users={users} onRefresh={loadUsers} onOpenPlayer={openPlayerModal} />}
+        {tab === 'create'      && <CreateUserTab onCreated={loadUsers} />}
+        {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onRefresh={loadWithdrawals} />}
+        {tab === 'live'        && <LiveTab liveFeed={liveFeed} />}
+        {tab === 'nextleg'     && <NextlegTab users={nextlegUsers} loading={nextlegLoading} onRefresh={loadNextlegUsers} />}
+        {tab === 'reset'       && <ResetTab />}
+        {tab === 'bets' && (
+          <BetsTab
+            bets={bets} betsTotal={betsTotal} betsLoading={betsLoading}
+            filter={betsFilter} setFilter={f => { setBetsFilter(f); setBetsPage(0) }}
+            game={betsGame} setGame={g => { setBetsGame(g); setBetsPage(0) }}
+            search={betsSearch} setSearch={setBetsSearch}
+            page={betsPage} setPage={setBetsPage} totalPages={totalPages}
+            onSearch={() => { setBetsPage(0); loadBets() }}
+          />
         )}
       </div>
 
-      {/* Messages */}
-      {msg && <div style={{ marginBottom: 14, padding: '10px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 10, fontFamily: 'Crimson Pro, serif', fontSize: 14, color: '#22C55E' }}>{msg}</div>}
-      {err && <div style={{ marginBottom: 14, padding: '10px 16px', background: 'rgba(196,30,58,0.1)', border: '1px solid rgba(196,30,58,0.3)', borderRadius: 10, fontFamily: 'Crimson Pro, serif', fontSize: 14, color: '#E8556A' }}>{err}</div>}
+      {/* Modal profil joueur */}
+      {playerModal && (
+        <PlayerModal
+          user={playerModal}
+          data={playerData}
+          onClose={() => { setPlayerModal(null); setPlayerData(null) }}
+        />
+      )}
+    </div>
+  )
+}
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid rgba(240,180,41,0.1)', paddingBottom: 10, flexWrap: 'wrap' }}>
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: '7px 14px', borderRadius: 8, fontSize: 11, fontWeight: 700,
-            fontFamily: 'Cinzel, serif', cursor: 'pointer', border: 'none',
-            background: tab === t ? 'rgba(240,180,41,0.12)' : 'transparent',
-            color: tab === t ? '#F0B429' : 'rgba(245,230,200,0.35)',
-          }}>
-            {TAB_LABELS[t]}
-          </button>
-        ))}
+// ── Stats globales ────────────────────────────────────────────────────────────
+function StatsTab({ stats }) {
+  if (!stats) return <div style={{ textAlign: 'center', color: '#2e2e50', padding: 40 }}>Chargement...</div>
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: '0 0 14px' }}>📊 Stats par jeu</h2>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #1e1e40' }}>
+              {['Jeu', 'Parties', 'Misé', 'Payé', 'RTP réel'].map(h => (
+                <th key={h} style={{ padding: '6px 8px', textAlign: h === 'Jeu' ? 'left' : 'right', color: '#44446a', fontWeight: 600 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(stats.byGame || []).map(g => (
+              <tr key={g.game} style={{ borderBottom: '1px solid #0f0f28' }}>
+                <td style={{ padding: '7px 8px', color: '#c8c8e8', fontWeight: 600 }}>
+                  {({ slots:'🎰', plinko:'🪀', roulette:'🎯', crash:'📈', blackjack:'🃏', mines:'💣' })[g.game] || '🎲'} {g.game}
+                </td>
+                <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9898b8' }}>{parseInt(g.plays).toLocaleString()}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9898b8' }}>{parseInt(g.total_bet).toLocaleString()}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'right', color: '#9898b8' }}>{parseInt(g.total_payout).toLocaleString()}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, color: parseFloat(g.actual_rtp) < 93 ? '#40f080' : '#f06060' }}>
+                  {g.actual_rtp}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {/* ── OVERVIEW ── */}
-      {tab === 'overview' && stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          {[
-            { icon:'👥', label:'Joueurs', value:stats.total_users },
-            { icon:'🎮', label:'Parties jouées', value:stats.total_games?.toLocaleString('fr-FR') },
-            { icon:'💰', label:'Total misé', value:`${parseInt(stats.total_bets || 0).toLocaleString('fr-FR')} ✦` },
-            { icon:'💎', label:'SuperJackpot', value:`${(jackpot||0).toLocaleString('fr-FR')} ✦`, color:'#E8556A' },
-            { icon:'✅', label:'En ligne', value:stats.online_count ?? '?', color:'#22C55E' },
-            { icon:'⏳', label:'Retraits en attente', value:pendingWds.length, color: pendingWds.length > 0 ? '#F0B429' : undefined },
-            { icon:'💸', label:'Retraits totaux', value:stats.total_withdrawals?.toLocaleString('fr-FR') ?? '?' },
-            { icon:'🏦', label:'Résidant total', value:`${parseInt(stats.total_balance || 0).toLocaleString('fr-FR')} ✦` },
-          ].map(({ icon, label, value, color }) => (
-            <div key={label} style={{ background: 'linear-gradient(160deg,#1E1015,#150D10)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '16px 18px', textAlign: 'center' }}>
-              <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 18, fontWeight: 700, color: color || '#F5E6C8', marginBottom: 4 }}>{value}</div>
-              <div style={{ fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(245,230,200,0.3)' }}>{label}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: '#f0c040', margin: '0 0 12px' }}>🔥 Plus gros gains</h2>
+          {(stats.topWinners || []).map((w, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #0f0f28', fontSize: 11 }}>
+              <div>
+                <span style={{ color: '#c8c8e8', fontWeight: 600 }}>{w.username}</span>
+                <span style={{ color: '#44446a', marginLeft: 8 }}>{w.game} · {w.bet_id}</span>
+              </div>
+              <span style={{ fontWeight: 800, color: '#40f080' }}>+{parseInt(w.profit).toLocaleString()}</span>
             </div>
           ))}
         </div>
-      )}
 
-      {/* ── JOUEURS ── */}
-      {tab === 'users' && (
-        <div>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un joueur…" style={{ ...inputSt, width: 220 }} />
-            <button onClick={loadAll} style={btnGold}>🔄 Actualiser</button>
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: '#f06060', margin: '0 0 12px' }}>💀 Plus grosses pertes</h2>
+          {(stats.topLosers || []).map((w, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #0f0f28', fontSize: 11 }}>
+              <div>
+                <span style={{ color: '#c8c8e8', fontWeight: 600 }}>{w.username}</span>
+                <span style={{ color: '#44446a', marginLeft: 8 }}>{w.game} · {w.bet_id}</span>
+              </div>
+              <span style={{ fontWeight: 800, color: '#f06060' }}>-{parseInt(w.loss).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Machines ──────────────────────────────────────────────────────────────────
+function MachinesTab({ gameSettings, toggleGame }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+      {GAMES_LIST.map(game => {
+        const on = gameSettings[game.id] !== false
+        return (
+          <div key={game.id} style={{
+            background: '#0a0a20', border: `1px solid ${on ? '#1e3020' : '#2a1a1a'}`,
+            borderRadius: 10, padding: '14px 18px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 26 }}>{game.icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0' }}>{game.label}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: on ? '#40f080' : '#f06060', marginTop: 2 }}>
+                  {on ? '✅ Active' : '🔧 Désactivée'}
+                </div>
+                {!on && (
+                  <div style={{ fontSize: 9, color: '#44446a', marginTop: 2 }}>
+                    Les parties en cours peuvent se terminer
+                  </div>
+                )}
+              </div>
+            </div>
+            <button onClick={() => toggleGame(game.id)} style={{
+              padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', border: '1px solid',
+              borderColor: on ? 'rgba(240,64,64,0.4)' : 'rgba(64,240,128,0.4)',
+              background: on ? 'rgba(240,64,64,0.08)' : 'rgba(64,240,128,0.08)',
+              color: on ? '#f06060' : '#40f080',
+            }}>
+              {on ? 'Désactiver' : 'Réactiver'}
+            </button>
           </div>
-          <div style={{ background: 'linear-gradient(160deg,#1E1015,#150D10)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Tous les paris ────────────────────────────────────────────────────────────
+function BetsTab({ bets, betsTotal, betsLoading, filter, setFilter, game, setGame, search, setSearch, page, setPage, totalPages, onSearch }) {
+  const GAME_ICONS = { slots:'🎰', plinko:'🪀', roulette:'🎯', crash:'📈', blackjack:'🃏', mines:'💣' }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {BET_FILTERS.map(f => (
+            <button key={f.id} onClick={() => setFilter(f.id)} style={{
+              padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 600,
+              cursor: 'pointer', border: filter === f.id ? '1px solid rgba(240,192,64,0.4)' : '1px solid #2a2a4a',
+              background: filter === f.id ? 'rgba(240,192,64,0.12)' : 'transparent',
+              color: filter === f.id ? '#f0c040' : '#5a5a8a',
+            }}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <select value={game} onChange={e => setGame(e.target.value)} style={{
+          background: '#0a0a20', border: '1px solid #2a2a4a', borderRadius: 7,
+          color: '#9898b8', padding: '5px 10px', fontSize: 11, cursor: 'pointer',
+        }}>
+          <option value="">Tous les jeux</option>
+          {GAMES_LIST.map(g => <option key={g.id} value={g.id}>{g.icon} {g.label}</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && onSearch()}
+            placeholder="Rechercher un joueur..."
+            style={{ background: '#0a0a20', border: '1px solid #2a2a4a', borderRadius: 7, color: '#c8c8e8', padding: '5px 10px', fontSize: 11, outline: 'none' }} />
+          <button onClick={onSearch} style={{ background: '#f0c040', color: '#07071a', fontWeight: 700, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11 }}>
+            Rechercher
+          </button>
+        </div>
+        <span style={{ fontSize: 10, color: '#44446a' }}>{betsTotal.toLocaleString()} résultats</span>
+      </div>
+
+      <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+        {betsLoading ? (
+          <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0', fontSize: 12 }}>Chargement...</div>
+        ) : bets.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0', fontSize: 12 }}>Aucun pari trouvé</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
-                  {['#', 'Pseudo', 'Solde', 'Statut', 'Créé le', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(245,230,200,0.3)', letterSpacing: '0.08em' }}>{h}</th>
+                <tr style={{ borderBottom: '1px solid #1e1e40' }}>
+                  {['#BetID', 'Joueur', 'Jeu', 'Mise', 'Gain', 'Résultat', 'Date'].map(h => (
+                    <th key={h} style={{ padding: '8px 10px', textAlign: h === '#BetID' || h === 'Joueur' || h === 'Jeu' ? 'left' : 'right', color: '#44446a', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map(u => (
-                  <tr key={u.id} style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: selUser?.id === u.id ? 'rgba(240,180,41,0.04)' : 'transparent', cursor: 'pointer' }}
-                    onClick={() => setSelUser(selUser?.id === u.id ? null : u)}>
-                    <td style={{ padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(245,230,200,0.25)' }}>{u.id}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <span style={{ fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: u.is_admin ? '#FFD700' : '#F5E6C8' }}>
-                        {u.is_admin ? '👑 ' : ''}{u.username}
-                      </span>
+                {bets.map(b => (
+                  <tr key={b.id} style={{ borderBottom: '1px solid #0f0f28' }}>
+                    <td style={{ padding: '7px 10px', fontFamily: 'monospace', fontSize: 10, color: '#5a5a8a' }}>{b.bet_id}</td>
+                    <td style={{ padding: '7px 10px', color: '#c8c8e8', fontWeight: 600 }}>{b.username}</td>
+                    <td style={{ padding: '7px 10px', color: '#9898b8' }}>{GAME_ICONS[b.game] || '🎲'} {b.game}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: '#9898b8' }}>{parseInt(b.bet).toLocaleString()}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: '#9898b8' }}>{parseInt(b.payout).toLocaleString()}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: b.profit > 0 ? '#40f080' : b.profit < 0 ? '#f06060' : '#8888cc' }}>
+                      {b.profit > 0 ? '+' : ''}{parseInt(b.profit).toLocaleString()}
                     </td>
-                    <td style={{ padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: '#F0B429' }}>
-                      {parseInt(u.balance || 0).toLocaleString('fr-FR')}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      {u.is_temp_pw
-                        ? <span style={{ fontFamily: 'Cinzel, serif', fontSize: 9, color: '#F0B429', background: 'rgba(240,180,41,0.1)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(240,180,41,0.3)' }}>Temp PW</span>
-                        : <span style={{ fontFamily: 'Cinzel, serif', fontSize: 9, color: '#22C55E', background: 'rgba(34,197,94,0.1)', padding: '2px 8px', borderRadius: 4 }}>Actif</span>
-                      }
-                    </td>
-                    <td style={{ padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(245,230,200,0.25)' }}>{u.created_at?.slice(0, 10)}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <button onClick={e => { e.stopPropagation(); setSelUser(selUser?.id === u.id ? null : u) }} style={{ fontFamily: 'Cinzel, serif', fontSize: 10, background: 'rgba(240,180,41,0.08)', border: '1px solid rgba(240,180,41,0.2)', color: '#F0B429', padding: '4px 10px', borderRadius: 6, cursor: 'pointer' }}>
-                        {selUser?.id === u.id ? 'Fermer' : 'Gérer'}
-                      </button>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', fontSize: 10, color: '#44446a' }}>
+                      {new Date(b.created_at).toLocaleString('fr')}
                     </td>
                   </tr>
                 ))}
-                {filteredUsers.length === 0 && (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', fontFamily: 'Crimson Pro, serif', color: 'rgba(245,230,200,0.2)' }}>Aucun joueur trouvé</td></tr>
-                )}
               </tbody>
             </table>
           </div>
+        )}
 
-          {selUser && (
-            <div style={{ marginTop: 14, background: 'rgba(240,180,41,0.04)', border: '1px solid rgba(240,180,41,0.2)', borderRadius: 14, padding: 18 }}>
-              <div style={{ fontFamily: 'Cinzel, serif', fontSize: 13, fontWeight: 700, color: '#F0B429', marginBottom: 14 }}>
-                Gérer : {selUser.username} · Solde actuel : {parseInt(selUser.balance || 0).toLocaleString('fr-FR')} ✦
-              </div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input value={credits} onChange={e => setCredits(e.target.value)} type="number" placeholder="Jetons (+/-)" style={{ ...inputSt, width: 130 }} />
-                  <button onClick={() => creditUser(selUser.id, credits, `Crédit admin`)} disabled={!credits} style={{ ...btnGold, opacity: !credits ? 0.4 : 1 }}>💳 Créditer</button>
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input value={newPw} onChange={e => setNewPw(e.target.value)} type="text" placeholder="Nouveau mot de passe" style={{ ...inputSt, width: 200 }} />
-                  <button onClick={() => resetPassword(selUser.id, newPw)} disabled={!newPw || newPw.length < 6} style={{ ...btnGold, background: 'rgba(240,180,41,0.1)', color: '#F0B429', border: '1px solid rgba(240,180,41,0.3)', boxShadow: 'none', opacity: !newPw || newPw.length < 6 ? 0.4 : 1 }}>🔐 Reset PW</button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 14 }}>
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+              style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #2a2a4a', background: 'transparent', color: page === 0 ? '#2a2a4a' : '#9898b8', cursor: page === 0 ? 'not-allowed' : 'pointer', fontSize: 11 }}>
+              ← Préc
+            </button>
+            <span style={{ padding: '5px 12px', fontSize: 11, color: '#5a5a8a' }}>{page + 1} / {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+              style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #2a2a4a', background: 'transparent', color: page >= totalPages - 1 ? '#2a2a4a' : '#9898b8', cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer', fontSize: 11 }}>
+              Suiv →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
-      {/* ── RETRAITS ── */}
-      {tab === 'withdrawals' && (
-        <div>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-            <button onClick={loadAll} style={btnGold}>🔄 Actualiser</button>
-            {pendingWds.length > 0 && <div style={{ fontFamily: 'Crimson Pro, serif', fontSize: 13, color: '#F0B429', alignSelf: 'center' }}>
-              ⚠ {pendingWds.length} en attente
-            </div>}
-          </div>
-          <div style={{ background: 'linear-gradient(160deg,#1E1015,#150D10)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
-            {wds.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px', fontFamily: 'Crimson Pro, serif', color: 'rgba(245,230,200,0.2)', fontSize: 14 }}>Aucune demande de retrait</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead><tr style={{ background: 'rgba(255,255,255,0.02)' }}>
-                  {['#', 'Joueur', 'Montant', 'Statut', 'Date', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontFamily: 'Cinzel, serif', fontSize: 10, color: 'rgba(245,230,200,0.3)', letterSpacing: '0.08em' }}>{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {wds.map(w => (
-                    <tr key={w.id} style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: w.status === 'pending' ? 'rgba(240,180,41,0.03)' : 'transparent' }}>
-                      <td style={{ padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(245,230,200,0.25)' }}>#{w.id}</td>
-                      <td style={{ padding: '10px 12px', fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: '#F5E6C8' }}>{w.username}</td>
-                      <td style={{ padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: '#F0B429' }}>{parseInt(w.amount).toLocaleString('fr-FR')} ✦</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <span style={{ fontFamily: 'Cinzel, serif', fontSize: 10, color: STATUS_COLS[w.status] || '#F5E6C8', background: (STATUS_COLS[w.status] || '#fff') + '14', padding: '3px 10px', borderRadius: 20, border: `1px solid ${STATUS_COLS[w.status] || '#fff'}30` }}>
-                          {STATUS_LABELS[w.status] || w.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(245,230,200,0.25)' }}>{w.created_at?.slice(0, 16)}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        {w.status === 'pending' && (
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => handleWithdraw(w.id, 'approved')} style={{ fontFamily: 'Cinzel, serif', fontSize: 10, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#22C55E', padding: '4px 10px', borderRadius: 6, cursor: 'pointer' }}>✅ Approuver</button>
-                            <button onClick={() => handleWithdraw(w.id, 'rejected', 'Refusé par admin')} style={{ fontFamily: 'Cinzel, serif', fontSize: 10, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', padding: '4px 10px', borderRadius: 6, cursor: 'pointer' }}>❌ Refuser</button>
-                          </div>
-                        )}
-                        {w.status !== 'pending' && <span style={{ fontFamily: 'Crimson Pro, serif', fontSize: 11, color: 'rgba(245,230,200,0.2)' }}>Traité</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
+// ── Users ─────────────────────────────────────────────────────────────────────
+function UsersTab({ users, onRefresh, onOpenPlayer }) {
+  const [selected,    setSelected]    = useState(null)
+  const [creditAmount,setCreditAmount]= useState('')
+  const [creditType,  setCreditType]  = useState('credit')
+  const [creditDesc,  setCreditDesc]  = useState('')
+  const [msg,         setMsg]         = useState('')
+  const [resetMsg,    setResetMsg]    = useState('')
 
-      {/* ── PARAMÈTRES JEUX ── */}
-      {tab === 'settings' && (
-        <div>
-          <div style={{ marginBottom: 14, fontFamily: 'Crimson Pro, serif', fontSize: 13, color: 'rgba(245,230,200,0.4)' }}>
-            Active ou désactive des jeux en temps réel. Les joueurs voient immédiatement "Maintenance".
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {GAMES.map(g => {
-              const enabled = games[g.id] !== false
-              return (
-                <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(160deg,#1E1015,#150D10)', border: `1px solid ${enabled ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.15)'}`, borderRadius: 12, padding: '14px 20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 24, filter: enabled ? '' : 'grayscale(1)' }}>{g.icon}</span>
-                    <div>
-                      <div style={{ fontFamily: 'Cinzel, serif', fontSize: 13, fontWeight: 700, color: enabled ? '#F5E6C8' : 'rgba(245,230,200,0.4)' }}>{g.name}</div>
-                      <div style={{ fontFamily: 'Crimson Pro, serif', fontSize: 11, color: enabled ? '#22C55E' : '#EF4444', marginTop: 2 }}>
-                        {enabled ? '✅ Actif' : '🔧 En maintenance'}
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={() => toggleGame(g.id, enabled)} style={{
-                    fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: 11,
-                    background: enabled ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
-                    border: `1px solid ${enabled ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
-                    color: enabled ? '#EF4444' : '#22C55E',
-                    padding: '8px 18px', borderRadius: 8, cursor: 'pointer',
-                  }}>
-                    {enabled ? '🔴 Désactiver' : '✅ Activer'}
+  async function handleCredit(e) {
+    e.preventDefault(); setMsg('')
+    try {
+      await axios.put(`/api/admin/users/${selected.id}/balance`, { amount: parseInt(creditAmount), type: creditType, description: creditDesc })
+      setMsg('✅ Solde mis à jour'); setCreditAmount(''); setCreditDesc(''); onRefresh()
+    } catch (err) { setMsg(`❌ ${err.response?.data?.error || 'Erreur'}`) }
+  }
+
+  async function handleReset(userId) {
+    try {
+      const { data } = await axios.put(`/api/admin/users/${userId}/reset-password`)
+      setResetMsg(`Nouveau mdp : ${data.temp_password}`)
+    } catch (err) { setResetMsg(`Erreur : ${err.response?.data?.error}`) }
+  }
+
+  async function handleDelete(userId) {
+    if (!confirm('Supprimer ce compte ?')) return
+    await axios.delete(`/api/admin/users/${userId}`); onRefresh()
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
+      <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18, overflowX: 'auto' }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: '0 0 12px' }}>
+          Tous les comptes ({users.length})
+        </h2>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #1e1e40' }}>
+              {['Pseudo', 'Solde', 'Parties', 'Net casino', 'Mdp', 'Actions'].map(h => (
+                <th key={h} style={{ padding: '7px 8px', textAlign: h === 'Pseudo' ? 'left' : 'right', color: '#44446a', fontWeight: 600 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id} style={{
+                borderBottom: '1px solid #0f0f28',
+                background: selected?.id === u.id ? 'rgba(240,192,64,0.03)' : 'transparent',
+                cursor: 'pointer',
+              }} onClick={() => setSelected(u)}>
+                <td style={{ padding: '8px 8px' }}>
+                  <button onClick={e => { e.stopPropagation(); onOpenPlayer(u) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8c8e8', fontWeight: 600, fontSize: 11, padding: 0, textDecoration: 'underline', textDecorationColor: '#2a2a4a' }}>
+                    {u.username}
                   </button>
+                </td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', color: '#f0c040', fontWeight: 700 }}>{parseInt(u.balance).toLocaleString()}</td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', color: '#9898b8' }}>{u.games_played || 0}</td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, color: u.net_loss > 0 ? '#40f080' : '#f06060' }}>
+                  {u.net_loss > 0 ? '+' : ''}{(u.net_loss || 0).toLocaleString()}
+                </td>
+                <td style={{ padding: '8px 8px', textAlign: 'right' }}>
+                  <span style={{
+                    fontSize: 9, padding: '1px 6px', borderRadius: 8,
+                    background: u.is_temp_pw ? 'rgba(240,192,64,0.1)' : 'rgba(64,240,128,0.1)',
+                    color: u.is_temp_pw ? '#f0c040' : '#40f080',
+                  }}>
+                    {u.is_temp_pw ? 'Provisoire' : 'OK'}
+                  </span>
+                </td>
+                <td style={{ padding: '8px 8px', textAlign: 'right' }}>
+                  <button onClick={e => { e.stopPropagation(); handleReset(u.id) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#4080f0', marginRight: 6 }}>
+                    Reset mdp
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); handleDelete(u.id) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#f06060' }}>
+                    Supprimer
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {resetMsg && <div style={{ marginTop: 10, padding: '7px 12px', background: 'rgba(64,128,240,0.08)', border: '1px solid rgba(64,128,240,0.2)', borderRadius: 6, fontSize: 11, color: '#6090f0' }}>{resetMsg}</div>}
+      </div>
+
+      {selected && (
+        <div style={{ background: '#0a0a20', border: '1px solid rgba(240,192,64,0.25)', borderRadius: 12, padding: 18 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#f0c040', margin: '0 0 10px' }}>Modifier : {selected.username}</h3>
+          <div style={{ padding: '8px 12px', background: '#07071a', borderRadius: 7, marginBottom: 14 }}>
+            <span style={{ fontSize: 11, color: '#44446a' }}>Solde : </span>
+            <span style={{ color: '#f0c040', fontWeight: 700 }}>{parseInt(selected.balance).toLocaleString()} jetons</span>
+          </div>
+          <form onSubmit={handleCredit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" onClick={() => setCreditType('credit')} style={{
+                flex: 1, padding: '7px', borderRadius: 7, fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', border: 'none',
+                background: creditType === 'credit' ? '#16a34a' : '#1a1a3a', color: '#fff',
+              }}>+ Créditer</button>
+              <button type="button" onClick={() => setCreditType('debit')} style={{
+                flex: 1, padding: '7px', borderRadius: 7, fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', border: 'none',
+                background: creditType === 'debit' ? '#dc2626' : '#1a1a3a', color: '#fff',
+              }}>- Débiter</button>
+            </div>
+            <input type="number" value={creditAmount} onChange={e => setCreditAmount(e.target.value)}
+              placeholder="Montant" required min={1}
+              style={{ background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 7, padding: '8px 12px', color: '#d8d8f0', fontSize: 12, outline: 'none' }} />
+            <input type="text" value={creditDesc} onChange={e => setCreditDesc(e.target.value)}
+              placeholder="Raison (optionnel)"
+              style={{ background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 7, padding: '8px 12px', color: '#d8d8f0', fontSize: 12, outline: 'none' }} />
+            <button type="submit" style={{ background: '#f0c040', color: '#07071a', fontWeight: 800, padding: '10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13 }}>
+              Confirmer
+            </button>
+          </form>
+          {msg && <p style={{ marginTop: 8, fontSize: 11, color: '#9898b8', textAlign: 'center' }}>{msg}</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Create user ───────────────────────────────────────────────────────────────
+function CreateUserTab({ onCreated }) {
+  const [username, setUsername] = useState('')
+  const [balance,  setBalance]  = useState('')
+  const [result,   setResult]   = useState(null)
+  const [error,    setError]    = useState('')
+  const [loading,  setLoading]  = useState(false)
+
+  async function handleCreate(e) {
+    e.preventDefault(); setError(''); setResult(null); setLoading(true)
+    try {
+      const { data } = await axios.post('/api/admin/users', { username, initial_balance: parseInt(balance) || 0 })
+      setResult(data); setUsername(''); setBalance(''); onCreated()
+    } catch (err) { setError(err.response?.data?.error || 'Erreur') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div style={{ maxWidth: 440 }}>
+      <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 24 }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: '#d8d8f0', margin: '0 0 20px' }}>Créer un compte joueur</h2>
+        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, color: '#44446a', display: 'block', marginBottom: 6 }}>Pseudo Minecraft</label>
+            <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="TonPseudo" required
+              style={{ width: '100%', background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 8, padding: '10px 14px', color: '#d8d8f0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: '#44446a', display: 'block', marginBottom: 6 }}>Solde initial</label>
+            <input type="number" value={balance} onChange={e => setBalance(e.target.value)} placeholder="0" min={0}
+              style={{ width: '100%', background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 8, padding: '10px 14px', color: '#d8d8f0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          {error && <div style={{ background: 'rgba(240,64,64,0.08)', border: '1px solid rgba(240,64,64,0.2)', borderRadius: 7, padding: '8px 12px', fontSize: 11, color: '#f06060' }}>{error}</div>}
+          <button type="submit" disabled={loading} style={{ background: '#f0c040', color: '#07071a', fontWeight: 800, padding: '12px', borderRadius: 8, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: 14, opacity: loading ? 0.6 : 1 }}>
+            {loading ? 'Création...' : '➕ Créer le compte'}
+          </button>
+        </form>
+
+        {result && (
+          <div style={{ marginTop: 16, padding: 14, background: 'rgba(64,240,128,0.06)', border: '1px solid rgba(64,240,128,0.2)', borderRadius: 10 }}>
+            <p style={{ color: '#40f080', fontWeight: 600, margin: '0 0 10px', fontSize: 13 }}>✅ Compte créé !</p>
+            <div style={{ fontSize: 11, color: '#9898b8', lineHeight: 1.7 }}>
+              <div>Pseudo : <strong style={{ color: '#fff' }}>{result.username}</strong></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                Mdp provisoire :
+                <span style={{ background: '#07071a', color: '#f0c040', fontFamily: 'monospace', fontWeight: 700, padding: '2px 10px', borderRadius: 6, fontSize: 14 }}>
+                  {result.temp_password}
+                </span>
+              </div>
+              <p style={{ color: '#44446a', fontSize: 10, marginTop: 8 }}>⚠️ Envoie ce mot de passe sur Discord. Il devra le changer à la 1ère connexion.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Withdrawals ───────────────────────────────────────────────────────────────
+function WithdrawalsTab({ withdrawals, onRefresh }) {
+  const [loading, setLoading] = useState(null)
+  const [notes,   setNotes]   = useState({})
+
+  async function handle(id, action) {
+    setLoading(id)
+    try { await axios.put(`/api/admin/withdrawals/${id}`, { action, admin_note: notes[id] || '' }); onRefresh() }
+    catch {} finally { setLoading(null) }
+  }
+
+  const pending = withdrawals.filter(w => w.status === 'pending')
+  const done    = withdrawals.filter(w => w.status !== 'pending')
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {pending.length === 0
+        ? <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: '28px', textAlign: 'center', color: '#2e2e50', fontSize: 12 }}>✅ Aucun retrait en attente</div>
+        : pending.map(w => (
+          <div key={w.id} style={{ background: '#0c0a00', border: '1px solid rgba(240,192,64,0.3)', borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#d8d8f0' }}>{w.username}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#f0c040' }}>{parseInt(w.amount).toLocaleString()} jetons</div>
+              <div style={{ fontSize: 10, color: '#44446a' }}>{new Date(w.created_at).toLocaleString('fr')}</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 220 }}>
+              <input type="text" placeholder="Note admin (optionnel)" value={notes[w.id] || ''}
+                onChange={e => setNotes(p => ({ ...p, [w.id]: e.target.value }))}
+                style={{ background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 7, padding: '7px 12px', color: '#c8c8e8', fontSize: 11, outline: 'none' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => handle(w.id, 'approve')} disabled={loading === w.id}
+                  style={{ flex: 1, background: '#16a34a', color: '#fff', fontWeight: 700, padding: '9px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12 }}>
+                  ✅ Approuver
+                </button>
+                <button onClick={() => handle(w.id, 'reject')} disabled={loading === w.id}
+                  style={{ flex: 1, background: '#dc2626', color: '#fff', fontWeight: 700, padding: '9px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12 }}>
+                  ❌ Refuser
+                </button>
+              </div>
+            </div>
+          </div>
+        ))
+      }
+
+      {done.length > 0 && (
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#5a5a8a', margin: '0 0 12px' }}>Historique</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #1e1e40' }}>
+                {['Joueur', 'Montant', 'Statut', 'Date'].map(h => (
+                  <th key={h} style={{ padding: '6px 8px', textAlign: h === 'Joueur' ? 'left' : 'right', color: '#44446a', fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {done.map(w => (
+                <tr key={w.id} style={{ borderBottom: '1px solid #0f0f28' }}>
+                  <td style={{ padding: '7px 8px', color: '#c8c8e8' }}>{w.username}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', color: '#f0c040', fontWeight: 700 }}>{parseInt(w.amount).toLocaleString()}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right' }}>
+                    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 8, background: w.status === 'approved' ? 'rgba(64,240,128,0.1)' : 'rgba(240,64,64,0.1)', color: w.status === 'approved' ? '#40f080' : '#f06060' }}>
+                      {w.status === 'approved' ? '✅ Approuvé' : '❌ Refusé'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', color: '#44446a', fontSize: 10 }}>{new Date(w.resolved_at || w.created_at).toLocaleDateString('fr')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Live ──────────────────────────────────────────────────────────────────────
+function LiveTab({ liveFeed }) {
+  const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎯', crash: '📈', blackjack: '🃏', mines: '💣' }
+  return (
+    <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#40f080' }} />
+        <h2 style={{ fontSize: 13, fontWeight: 700, color: '#d8d8f0', margin: 0 }}>Activité en direct</h2>
+      </div>
+      {liveFeed.length === 0 ? (
+        <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0', fontSize: 12 }}>En attente d'activité...</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {liveFeed.map((e, i) => (
+            <div key={i} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '8px 12px', background: '#07071a', borderRadius: 8,
+              border: '1px solid #12122a', fontSize: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>{GAME_ICONS[e.game] || '🎲'}</span>
+                <div>
+                  <span style={{ color: '#c8c8e8', fontWeight: 600 }}>{e.username}</span>
+                  <span style={{ color: '#44446a', marginLeft: 6 }}>{e.game}</span>
                 </div>
-              )
-            })}
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontWeight: 700, color: e.payout > e.bet ? '#40f080' : '#f06060' }}>
+                  {e.payout > e.bet ? `+${(e.payout - e.bet).toLocaleString()}` : `-${e.bet?.toLocaleString()}`}
+                </div>
+                {e.bet_id && <div style={{ fontSize: 9, color: '#2e2e50', fontFamily: 'monospace' }}>{e.bet_id}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── NextLeg Mod ───────────────────────────────────────────────────────────────
+function NextlegTab({ users, loading, onRefresh }) {
+  const [noteModal,  setNoteModal]  = useState(null)
+  const [noteText,   setNoteText]   = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+
+  function timeSince(dateStr) {
+    if (!dateStr) return '—'
+    // Ajoute 'Z' si pas de timezone pour forcer UTC → heure locale correcte
+    const normalized = dateStr.includes('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
+    const date = new Date(normalized)
+    const diff = Date.now() - date.getTime()
+    const m = Math.floor(diff / 60000)
+    if (m < 1)  return 'À l\'instant'
+    if (m < 60) return `${m}min`
+    const h = Math.floor(m / 60)
+    if (h < 24) {
+      // Affiche l'heure exacte si aujourd'hui
+      return date.toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' })
+    }
+    return `${Math.floor(h / 24)}j`
+  }
+
+  async function deleteUser(uid) {
+    if (!confirm('Supprimer cet utilisateur du suivi ?')) return
+    try { await axios.delete(`/api/admin/nextleg-users/${uid}`); onRefresh() } catch {}
+  }
+
+  async function saveNote() {
+    if (!noteModal) return
+    setSavingNote(true)
+    try {
+      await axios.put(`/api/admin/nextleg-users/${noteModal.uid}/note`, { note: noteText })
+      onRefresh()
+      setNoteModal(null)
+    } catch {}
+    setSavingNote(false)
+  }
+
+  const badge = (color) => ({
+    background: color + '22', color,
+    padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+  })
+
+  const btn = (color = '#f0c040') => ({
+    background: color + '18', border: `1px solid ${color}44`, color,
+    padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+  })
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 15, fontWeight: 800, color: '#d8d8f0', margin: 0 }}>🟢 Utilisateurs du mod NextLeg</h2>
+          <p style={{ fontSize: 11, color: '#44446a', margin: '4px 0 0' }}>
+            Joueurs avec "Envoi données : ON" · {users.length} enregistré{users.length > 1 ? 's' : ''}
+          </p>
+        </div>
+        <button onClick={onRefresh} style={btn()}>🔄 Actualiser</button>
+      </div>
+
+      {loading && <div style={{ textAlign: 'center', color: '#44446a', padding: 40 }}>Chargement...</div>}
+
+      {!loading && users.length === 0 && (
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 48, textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>🎮</div>
+          <div style={{ color: '#44446a', fontSize: 13 }}>Aucun utilisateur du mod pour l'instant.</div>
+          <div style={{ color: '#2e2e50', fontSize: 11, marginTop: 6 }}>
+            Les joueurs apparaissent ici dès qu'ils activent "Envoi données : ON" dans le mod.
           </div>
         </div>
       )}
 
-      {/* ── JACKPOT ── */}
-      {tab === 'jackpot' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 500 }}>
-          <div style={{ background: 'rgba(196,30,58,0.06)', border: '1px solid rgba(196,30,58,0.2)', borderRadius: 14, padding: '20px', textAlign: 'center' }}>
-            <div style={{ fontFamily: 'Cinzel, serif', fontSize: 11, color: 'rgba(232,85,106,0.6)', letterSpacing: '0.15em', marginBottom: 8 }}>SUPERJACKPOT ACTUEL</div>
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 36, fontWeight: 900, color: '#E8556A' }}>{(jackpot || 0).toLocaleString('fr-FR')} ✦</div>
-          </div>
-          <div style={{ background: 'linear-gradient(160deg,#1E1015,#150D10)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: 18 }}>
-            <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: 'rgba(245,230,200,0.5)', marginBottom: 12 }}>Modifier le montant</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input value={newAmount} onChange={e => setNewAmount(e.target.value)} type="number" placeholder="Nouveau montant" style={{ ...inputSt, flex: 1 }} />
-              <button onClick={updateJackpot} disabled={!newAmount} style={{ ...btnGold, opacity: !newAmount ? 0.4 : 1 }}>Mettre à jour</button>
-            </div>
-          </div>
-          <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 14, padding: 18 }}>
-            <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: '#EF4444', marginBottom: 8 }}>⚠ Tirage manuel</div>
-            <div style={{ fontFamily: 'Crimson Pro, serif', fontSize: 13, color: 'rgba(245,230,200,0.5)', marginBottom: 12 }}>
-              Déclenche le tirage immédiatement. Utilisé si le cron ne tourne pas.
-            </div>
-            <button onClick={triggerDraw} style={{ fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: 11, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#EF4444', padding: '10px 20px', borderRadius: 8, cursor: 'pointer' }}>
-              💎 Déclencher le tirage maintenant
-            </button>
-          </div>
+      {!loading && users.length > 0 && (
+        <div style={{ background: '#0a0a20', border: '1px solid #1e1e40', borderRadius: 12, padding: 18, overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                {['Pseudo MC', 'Alias', 'Version', '1ère connexion', 'Dernière vue', 'Pings', 'Note', 'UID', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#44446a', textTransform: 'uppercase', letterSpacing: 1, borderBottom: '1px solid #1e1e40' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.uid}
+                  onMouseEnter={e => e.currentTarget.style.background = '#0d0d25'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  style={{ transition: 'background 0.15s' }}
+                >
+                  <td style={{ padding: '10px 12px', fontSize: 12, color: '#c8c8e8', borderBottom: '1px solid #0e0e28' }}>
+                    <span style={{ fontWeight: 700, color: '#e8e8ff' }}>{u.player}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={{ color: u.alias ? '#9898c8' : '#2e2e50', fontStyle: u.alias ? 'normal' : 'italic' }}>
+                      {u.alias || '—'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={badge('#40f0a0')}>v{u.version}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 11, color: '#5a5a8a', borderBottom: '1px solid #0e0e28' }}>
+                    {u.first_seen?.substring(0, 16)}
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={{ color: '#f0c040', fontWeight: 600 }}>{timeSince(u.last_seen)}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={badge('#7878f0')}>{u.ping_count}×</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 11, borderBottom: '1px solid #0e0e28', maxWidth: 140 }}>
+                    <span style={{ color: u.note ? '#e8c060' : '#2e2e50', fontStyle: u.note ? 'normal' : 'italic', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.note || 'Aucune note'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#3a3a60' }} title={u.uid}>
+                      {u.uid.substring(0, 8)}…
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #0e0e28' }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => { setNoteModal({ uid: u.uid, player: u.player }); setNoteText(u.note || '') }} style={btn('#a0a0f0')} title="Note">✏️</button>
+                      <button onClick={() => deleteUser(u.uid)} style={btn('#f04040')} title="Supprimer">🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* ── ACTIONS ── */}
-      {tab === 'actions' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 500 }}>
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: 18 }}>
-            <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: 'rgba(245,230,200,0.5)', marginBottom: 8 }}>Créer un joueur</div>
-            <CreateUser onDone={() => { loadAll(); flash('Joueur créé ✅') }} />
-          </div>
-          <div style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 14, padding: 18 }}>
-            <div style={{ fontFamily: 'Cinzel, serif', fontSize: 12, fontWeight: 700, color: '#EF4444', marginBottom: 8 }}>Zone danger — NE PAS UTILISER en prod</div>
-            <div style={{ fontFamily: 'Crimson Pro, serif', fontSize: 13, color: 'rgba(245,230,200,0.4)', marginBottom: 12 }}>
-              Réinitialise TOUT : historique, jackpot, retraits, chat. Irréversible.
+      {/* Modal note */}
+      {noteModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#0d0d22', border: '1px solid #2a2a50', borderRadius: 14, padding: 28, width: 380 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: '#d8d8f0', margin: '0 0 6px' }}>
+              ✏️ Note pour <span style={{ color: '#f0c040' }}>{noteModal.player}</span>
+            </h3>
+            <p style={{ fontSize: 11, color: '#44446a', margin: '0 0 14px' }}>Usage interne — non visible par le joueur.</p>
+            <textarea
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              placeholder="Ex : autorisé à partager le mod, VIP, suspect..."
+              rows={4}
+              style={{ width: '100%', background: '#07071a', border: '1px solid #2a2a4a', borderRadius: 8, color: '#d8d8f0', padding: '10px 12px', fontSize: 12, resize: 'vertical', boxSizing: 'border-box', outline: 'none' }}
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 14, justifyContent: 'flex-end' }}>
+              <button onClick={() => setNoteModal(null)} style={btn('#5a5a8a')}>Annuler</button>
+              <button onClick={saveNote} disabled={savingNote} style={btn('#f0c040')}>
+                {savingNote ? 'Sauvegarde...' : '✔ Sauvegarder'}
+              </button>
             </div>
-            <button onClick={async () => {
-              if (!confirm('⚠ ATTENTION : effacer TOUTES les données ? Cette action est irréversible !')) return
-              try {
-                await axios.post('/api/admin/reset-data', { secret: 'frilous-reset-2025' })
-                flash('Base de données nettoyée')
-                loadAll()
-              } catch { flash('Erreur reset', true) }
-            }} style={{ fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: 11, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#EF4444', padding: '10px 20px', borderRadius: 8, cursor: 'pointer' }}>
-              🗑️ Reset total (dangereux)
-            </button>
           </div>
         </div>
       )}
@@ -403,42 +894,186 @@ export default function Admin() {
   )
 }
 
-function CreateUser({ onDone }) {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [balance,  setBalance]  = useState('')
-  const [isAdmin,  setIsAdmin]  = useState(false)
-  const [loading,  setLoading]  = useState(false)
-  const [err,      setErr]      = useState('')
-  const inputSt = {
-    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(240,180,41,0.2)',
-    borderRadius: 8, padding: '8px 12px', color: '#F5E6C8',
-    fontFamily: 'Crimson Pro, serif', fontSize: 13, outline: 'none',
-  }
+// ── Reset données ─────────────────────────────────────────────────────────────
+function ResetTab() {
+  const [step,    setStep]    = useState('idle')  // idle | confirm | loading | done | error
+  const [msg,     setMsg]     = useState('')
 
-  async function submit() {
-    if (!username || !password) return setErr('Pseudo et mot de passe requis')
-    setLoading(true); setErr('')
+  async function doReset() {
+    setStep('loading')
     try {
-      await axios.post('/api/admin/users', { username, password, balance: parseInt(balance) || 0, is_admin: isAdmin ? 1 : 0 })
-      setUsername(''); setPassword(''); setBalance(''); setIsAdmin(false)
-      onDone()
-    } catch (e) { setErr(e.response?.data?.error || 'Erreur') }
-    setLoading(false)
+      const { data } = await axios.post('/api/admin/reset-data', { secret: 'frilous-reset-2025' })
+      setMsg(data.message || 'Reset effectué !')
+      setStep('done')
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'Erreur serveur')
+      setStep('error')
+    }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Pseudo Minecraft" style={inputSt} />
-      <input value={password} onChange={e => setPassword(e.target.value)} type="text" placeholder="Mot de passe temporaire" style={inputSt} />
-      <input value={balance}  onChange={e => setBalance(e.target.value)}  type="number" placeholder="Jetons de départ (0)" style={inputSt} />
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'Crimson Pro, serif', fontSize: 13, color: 'rgba(245,230,200,0.5)', cursor: 'pointer' }}>
-        <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} /> Admin
-      </label>
-      {err && <div style={{ color: '#E8556A', fontFamily: 'Crimson Pro, serif', fontSize: 12 }}>⚠ {err}</div>}
-      <button onClick={submit} disabled={loading} style={{ fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: 11, background: 'linear-gradient(135deg,#FFD700,#F0B429)', color: '#1A0A00', padding: '10px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', opacity: loading ? 0.5 : 1 }}>
-        {loading ? 'Création…' : '➕ Créer le joueur'}
-      </button>
+    <div style={{ maxWidth: 520 }}>
+      <div style={{ background: '#0a0a20', border: '1px solid rgba(240,64,64,0.3)', borderRadius: 14, padding: 28 }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <span style={{ fontSize: 32 }}>🗑️</span>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#f06060' }}>Reset des données de jeu</div>
+            <div style={{ fontSize: 11, color: '#44446a', marginTop: 3 }}>
+              Supprime l'historique avant la sortie officielle
+            </div>
+          </div>
+        </div>
+
+        {/* Ce qui sera supprimé */}
+        <div style={{ background: '#07071a', border: '1px solid #1e1e40', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#5a5a8a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+            Ce qui sera effacé
+          </div>
+          {[
+            '🎮 Tout l\'historique des parties (game_history)',
+            '📺 Le live feed (live_feed)',
+            '💎 L\'historique du SuperJackpot',
+            '🎡 Les spins de la roue du jour (wheel_spins)',
+            '💰 SuperJackpot remis à 5 000 jetons',
+          ].map((item, i) => (
+            <div key={i} style={{ fontSize: 12, color: '#7070a0', padding: '4px 0', borderBottom: i < 4 ? '1px solid #12122a' : 'none' }}>
+              {item}
+            </div>
+          ))}
+          <div style={{ marginTop: 12, fontSize: 11, color: '#40f080' }}>
+            ✅ Les comptes joueurs et leurs soldes ne sont PAS touchés
+          </div>
+        </div>
+
+        {/* États */}
+        {step === 'idle' && (
+          <button onClick={() => setStep('confirm')} style={{
+            width: '100%', padding: '12px', background: 'rgba(240,64,64,0.1)',
+            border: '1px solid rgba(240,64,64,0.4)', borderRadius: 10,
+            color: '#f06060', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+          }}>
+            🗑️ Réinitialiser les données
+          </button>
+        )}
+
+        {step === 'confirm' && (
+          <div style={{ background: 'rgba(240,64,64,0.06)', border: '1px solid rgba(240,64,64,0.3)', borderRadius: 10, padding: 18, textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#f06060', marginBottom: 6 }}>
+              ⚠️ Es-tu sûr ? Cette action est irréversible.
+            </div>
+            <div style={{ fontSize: 11, color: '#5a5a8a', marginBottom: 16 }}>
+              Toutes les données de jeu seront supprimées définitivement.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setStep('idle')} style={{
+                padding: '9px 20px', borderRadius: 8, border: '1px solid #2a2a4a',
+                background: 'transparent', color: '#9898b8', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+              }}>
+                Annuler
+              </button>
+              <button onClick={doReset} style={{
+                padding: '9px 20px', borderRadius: 8, border: 'none',
+                background: '#dc2626', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 800,
+              }}>
+                ✔ Oui, tout effacer
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'loading' && (
+          <div style={{ textAlign: 'center', padding: '16px', color: '#f0c040', fontSize: 13 }}>
+            ⏳ Reset en cours…
+          </div>
+        )}
+
+        {step === 'done' && (
+          <div style={{ background: 'rgba(64,240,128,0.06)', border: '1px solid rgba(64,240,128,0.25)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 20, marginBottom: 8 }}>✅</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#40f080' }}>{msg}</div>
+            <div style={{ fontSize: 11, color: '#44446a', marginTop: 6 }}>
+              Tu peux maintenant supprimer cette route et ce bouton avant la prochaine mise en prod.
+            </div>
+          </div>
+        )}
+
+        {step === 'error' && (
+          <div style={{ background: 'rgba(240,64,64,0.06)', border: '1px solid rgba(240,64,64,0.25)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#f06060' }}>❌ {msg}</div>
+            <button onClick={() => setStep('idle')} style={{ marginTop: 10, fontSize: 11, color: '#9898b8', background: 'none', border: '1px solid #2a2a4a', borderRadius: 7, padding: '5px 14px', cursor: 'pointer' }}>
+              Réessayer
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Modal profil joueur ───────────────────────────────────────────────────────
+function PlayerModal({ user, data, onClose }) {
+  const GAME_ICONS = { slots: '🎰', plinko: '🪀', roulette: '🎯', crash: '📈', blackjack: '🃏', mines: '💣' }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+    }} onClick={onClose}>
+      <div style={{
+        background: '#0a0a20', border: '1px solid #2a2a4a',
+        borderRadius: 16, padding: 28, width: 600, maxWidth: '90vw', maxHeight: '80vh',
+        overflow: 'auto',
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: '#f0c040', margin: 0 }}>👤 {user.username}</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5a5a8a', fontSize: 20 }}>×</button>
+        </div>
+
+        {!data ? (
+          <div style={{ textAlign: 'center', color: '#2e2e50', padding: '24px 0' }}>Chargement...</div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+              {[
+                { label: 'Parties', value: data.stats.games_played.toLocaleString() },
+                { label: 'Total misé', value: data.stats.total_bet.toLocaleString() },
+                { label: 'Net casino', value: `+${data.stats.net_loss.toLocaleString()}`, color: data.stats.net_loss > 0 ? '#40f080' : '#f06060' },
+              ].map(s => (
+                <div key={s.label} style={{ background: '#07071a', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: s.color || '#d8d8f0' }}>{s.value}</div>
+                  <div style={{ fontSize: 10, color: '#44446a', marginTop: 2 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <h3 style={{ fontSize: 12, fontWeight: 700, color: '#5a5a8a', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1 }}>
+              Dernières parties
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {data.history.map((h, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: '#07071a', borderRadius: 7, fontSize: 11 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span>{GAME_ICONS[h.game] || '🎲'}</span>
+                    <span style={{ color: '#9898b8' }}>{h.game}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 9, color: '#44446a' }}>{h.bet_id}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <span style={{ color: '#5a5a8a' }}>Mise {parseInt(h.bet).toLocaleString()}</span>
+                    <span style={{ fontWeight: 700, color: h.profit > 0 ? '#40f080' : h.profit < 0 ? '#f06060' : '#8888cc' }}>
+                      {h.profit > 0 ? '+' : ''}{parseInt(h.profit).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Link to={`/joueur/${user.username}`} style={{ display: 'block', textAlign: 'center', marginTop: 14, fontSize: 11, color: '#5a5a8a', textDecoration: 'none', padding: '8px', borderTop: '1px solid #1e1e40' }}>
+              Voir le profil public complet →
+            </Link>
+          </>
+        )}
+      </div>
     </div>
   )
 }
